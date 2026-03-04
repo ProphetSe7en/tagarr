@@ -1,0 +1,46 @@
+# ========== CONFIGURATION ==========
+# Config for tagarr_remove.sh — Bulk Tag Removal Tool
+#
+# Removes specified tags from all movies across one or two Radarr instances.
+# Optionally deletes the tag definitions from Radarr.
+# See README.md for full documentation and usage examples.
+#
+# Flags: --dry-run | --live
+
+# Copy this file to tagarr_remove.conf and fill in your values.
+
+# === PRIMARY RADARR ===
+PRIMARY_RADARR_URL="http://localhost:7878"
+PRIMARY_RADARR_API_KEY="your-api-key-here"
+PRIMARY_RADARR_NAME="Radarr"
+
+# === SECONDARY RADARR ===
+# When enabled, tags are also removed from the secondary instance.
+ENABLE_SECONDARY=false
+SECONDARY_RADARR_URL="http://localhost:7979"
+SECONDARY_RADARR_API_KEY="your-api-key-here"
+SECONDARY_RADARR_NAME="Radarr 4K"
+
+# === TAGS TO REMOVE ===
+# List of tag labels to remove from movies. Applied to both instances.
+# Comment out tags you want to keep.
+TAGS_TO_REMOVE=(
+    #"flux"
+    #"sic"
+    #"groupname"
+)
+
+# === TAG DEFINITIONS ===
+# When true, deletes the tag definition from Radarr after removing it
+# from all movies. When false, only removes tags from movies but keeps
+# the tag definition available for future use.
+DELETE_TAG_DEFINITIONS=true
+
+# === DRY-RUN ===
+# When true, shows what would be removed without making changes.
+# Override with --live flag on command line.
+ENABLE_DRY_RUN=true
+
+# === LOGGING ===
+ENABLE_LOGGING=true
+LOG_FILE="${SCRIPT_DIR}/logs/tagarr_remove.log"

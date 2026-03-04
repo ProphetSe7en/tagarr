@@ -1,0 +1,87 @@
+# ========== CONFIGURATION ==========
+# Config for tagarr.sh — Batch Radarr Release Group Tagger
+#
+# Scans all movies and tags by release group with quality/audio filtering.
+# See README.md for full documentation and usage examples.
+#
+# Flags: --dry-run | --tag NAME | --discover | --help
+
+# Copy this file to tagarr.conf and fill in your values.
+
+# === PRIMARY RADARR ===
+# The main Radarr instance to scan and tag movies in.
+PRIMARY_RADARR_URL="http://localhost:7878"
+PRIMARY_RADARR_API_KEY="your-api-key-here"
+PRIMARY_RADARR_NAME="Radarr"
+
+# === SECONDARY RADARR ===
+# Optional second Radarr instance. When enabled, tags are mirrored from
+# primary to secondary for any movie that exists in both (matched by TMDb ID).
+ENABLE_SYNC_TO_SECONDARY=false
+SECONDARY_RADARR_URL="http://localhost:7979"
+SECONDARY_RADARR_API_KEY="your-api-key-here"
+SECONDARY_RADARR_NAME="Radarr 4K"
+
+# === RELEASE GROUPS ===
+# Each entry defines a release group to tag. Format:
+#   "search_string:tag_name:display_name:mode"
+#
+# Fields:
+#   search_string — Lowercase string matched against releaseGroup field (word boundary)
+#   tag_name      — Tag label created in Radarr (lowercase, no spaces)
+#   display_name  — Human-readable name shown in logs and Discord
+#   mode          — "filtered" requires quality+audio match; "simple" tags any match
+#
+# Commented entries (#) are ignored for tagging but counted as "known" by
+# discovery, so the same group won't be re-discovered.
+RELEASE_GROUPS=(
+    "flux:flux:FLUX:filtered"
+    "sic:sic:SiC:filtered"
+    #"groupname:tagname:DisplayName:filtered"
+)
+
+# === QUALITY FILTERS ===
+# When ENABLE_QUALITY_FILTER=true, "filtered" mode groups only tag movies
+# whose filename contains one of the enabled quality sources.
+ENABLE_QUALITY_FILTER=true
+ENABLE_MA_WEBDL=true       # Movies Anywhere WEB-DL
+ENABLE_PLAY_WEBDL=true     # Google Play WEB-DL
+
+# === AUDIO FILTERS ===
+# When ENABLE_AUDIO_FILTER=true, "filtered" mode groups only tag movies
+# whose filename contains one of the enabled lossless audio codecs.
+ENABLE_AUDIO_FILTER=true
+ENABLE_TRUEHD=true         # Dolby TrueHD (without Atmos)
+ENABLE_TRUEHD_ATMOS=true   # Dolby TrueHD Atmos
+ENABLE_DTS_X=true          # DTS:X
+ENABLE_DTS_HD_MA=true      # DTS-HD Master Audio
+
+# === DISCOVERY ===
+# When enabled, movies that pass all quality+audio filters but whose release
+# group is not in RELEASE_GROUPS are flagged as "discovered". New groups are
+# written to this config as commented entries for manual review.
+ENABLE_DISCOVERY=true
+DISCOVERY_LOG_FILE="${SCRIPT_DIR}/discovery.log"
+
+# === DEBUG ===
+# When enabled, prints a detailed per-movie breakdown at the end of the run
+# showing file paths, quality/audio details, and match reasons for every
+# tagged and untagged movie. Useful for troubleshooting filter behavior.
+ENABLE_DEBUG=false
+
+# === DISCORD NOTIFICATIONS ===
+# Send summary, movie lists, and discovery results to a Discord channel.
+DISCORD_ENABLED=false
+DISCORD_WEBHOOK_URL=""
+
+# === LOGGING ===
+# Main log file. Rotated automatically at 2 MiB (keeps one .old backup).
+# Discovery log is rotated at the same threshold.
+ENABLE_LOGGING=true
+LOG_FILE="${SCRIPT_DIR}/logs/tagarr.log"
+PROGRESS_INTERVAL=50
+
+# === TAG CLEANUP ===
+# When enabled, tags defined in RELEASE_GROUPS that have 0 movies assigned
+# are deleted from Radarr at the end of each run.
+CLEANUP_UNUSED_TAGS=true

@@ -1,0 +1,45 @@
+# ========== CONFIGURATION ==========
+# Config for tagarr_rename.sh — Bulk Tag Rename Tool
+#
+# Renames tags by creating a new tag, migrating all movies, and removing the
+# old tag. Three-step process: create new, migrate, remove old.
+# See README.md for full documentation and usage examples.
+#
+# Flags: --dry-run | --live
+
+# Copy this file to tagarr_rename.conf and fill in your values.
+
+# === PRIMARY RADARR ===
+PRIMARY_RADARR_URL="http://localhost:7878"
+PRIMARY_RADARR_API_KEY="your-api-key-here"
+PRIMARY_RADARR_NAME="Radarr"
+
+# === SECONDARY RADARR ===
+# When enabled, renames are also applied to the secondary instance.
+ENABLE_SECONDARY=false
+SECONDARY_RADARR_URL="http://localhost:7979"
+SECONDARY_RADARR_API_KEY="your-api-key-here"
+SECONDARY_RADARR_NAME="Radarr 4K"
+
+# === TAG RENAMES ===
+# Format: "old_name:new_name"
+# Each entry renames a tag: creates new, migrates movies, removes old.
+# Applied to both instances. Comment out pairs you don't need.
+TAG_RENAMES=(
+    #"old-tag:new-tag"
+    #"flux:flux-v2"
+)
+
+# === OLD TAG CLEANUP ===
+# When true, deletes the old tag definition from Radarr after migrating
+# all movies to the new tag. When false, both old and new tags are kept.
+DELETE_OLD_TAGS=true
+
+# === DRY-RUN ===
+# When true, shows what would be renamed without making changes.
+# Override with --live flag on command line.
+ENABLE_DRY_RUN=true
+
+# === LOGGING ===
+ENABLE_LOGGING=true
+LOG_FILE="${SCRIPT_DIR}/logs/tagarr_rename.log"

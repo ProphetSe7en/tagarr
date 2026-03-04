@@ -1,0 +1,38 @@
+# ========== CONFIGURATION ==========
+# Config for tagarr_recover.sh — Release Group Fix from Grab History
+#
+# Recovers missing release groups from Radarr grab history. Dry-run by
+# default. See README.md for full documentation, safety chain details,
+# and usage examples.
+#
+# Flags: --dry-run | --live | --instance TYPE | --movie ID | --no-rename | --help
+
+# Copy this file to tagarr_recover.conf and fill in your values.
+
+# === PRIMARY RADARR ===
+PRIMARY_RADARR_URL="http://localhost:7878"
+PRIMARY_RADARR_API_KEY="your-api-key-here"
+PRIMARY_RADARR_NAME="Radarr"
+
+# === SECONDARY RADARR ===
+ENABLE_SECONDARY=false
+SECONDARY_RADARR_URL="http://localhost:7979"
+SECONDARY_RADARR_API_KEY="your-api-key-here"
+SECONDARY_RADARR_NAME="Radarr 4K"
+
+# === RENAME ===
+# Triggers Radarr's RenameFiles command after fixing each movie.
+# Requires {Release Group} in your Radarr movie naming format.
+ENABLE_RENAME=true
+
+# === DRY-RUN ===
+# Override with --live flag on command line.
+ENABLE_DRY_RUN=true
+
+# === DISCORD NOTIFICATIONS ===
+DISCORD_ENABLED=false
+DISCORD_WEBHOOK_URL=""
+
+# === LOGGING ===
+ENABLE_LOGGING=true
+LOG_FILE="${SCRIPT_DIR}/logs/tagarr_recover.log"

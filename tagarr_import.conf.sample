@@ -1,0 +1,98 @@
+# ========== CONFIGURATION ==========
+# Config for tagarr_import.sh — Event-Driven Radarr Tagger
+#
+# Radarr Connect handler (On Download / On Upgrade / On File Delete).
+# Separate from tagarr.conf — both configs are independent.
+# See README.md for setup instructions and full documentation.
+
+# Copy this file to tagarr_import.conf and fill in your values.
+
+# === PRIMARY RADARR ===
+# The Radarr instance this script runs in (Connect > Custom Script).
+# Use container hostname when running inside Docker, IP when running from host.
+PRIMARY_RADARR_URL="http://localhost:7878"
+PRIMARY_RADARR_API_KEY="your-api-key-here"
+PRIMARY_RADARR_NAME="Radarr"
+
+# === SECONDARY RADARR ===
+# Optional second Radarr instance. When enabled, tags are mirrored from
+# primary to secondary for any movie that exists in both (matched by TMDb ID).
+ENABLE_SYNC_TO_SECONDARY=false
+SECONDARY_RADARR_URL="http://localhost:7979"
+SECONDARY_RADARR_API_KEY="your-api-key-here"
+SECONDARY_RADARR_NAME="Radarr 4K"
+
+# === RELEASE GROUPS ===
+# Each entry defines a release group to tag. Format:
+#   "search_string:tag_name:display_name:mode"
+#
+# Fields:
+#   search_string — Lowercase string matched against releaseGroup field (word boundary)
+#   tag_name      — Tag label created in Radarr (lowercase, no spaces)
+#   display_name  — Human-readable name shown in logs and Discord
+#   mode          — "filtered" requires quality+audio match; "simple" tags any match
+#
+# Commented entries (#) are ignored for tagging but counted as "known" by
+# discovery, so the same group won't be re-discovered.
+RELEASE_GROUPS=(
+    "flux:flux:FLUX:filtered"
+    "sic:sic:SiC:filtered"
+    #"groupname:tagname:DisplayName:filtered"
+)
+
+# === QUALITY FILTERS ===
+# When ENABLE_QUALITY_FILTER=true, "filtered" mode groups only tag movies
+# whose filename contains one of the enabled quality sources.
+ENABLE_QUALITY_FILTER=true
+ENABLE_MA_WEBDL=true       # Movies Anywhere WEB-DL
+ENABLE_PLAY_WEBDL=true     # Google Play WEB-DL
+
+# === AUDIO FILTERS ===
+# When ENABLE_AUDIO_FILTER=true, "filtered" mode groups only tag movies
+# whose filename contains one of the enabled lossless audio codecs.
+ENABLE_AUDIO_FILTER=true
+ENABLE_TRUEHD=true         # Dolby TrueHD (without Atmos)
+ENABLE_TRUEHD_ATMOS=true   # Dolby TrueHD Atmos
+ENABLE_DTS_X=true          # DTS:X
+ENABLE_DTS_HD_MA=true      # DTS-HD Master Audio
+
+# === RELEASE GROUP RECOVERY ===
+# When enabled, movies imported with an empty/unknown release group are
+# checked against grab history. If a valid releaseGroup is found, it is
+# patched into the moviefile and a rename is triggered. This runs before
+# the tagging logic so the corrected group is available for tag matching.
+ENABLE_RECOVER=true
+
+# === DISCOVERY ===
+# When enabled, movies that pass all quality+audio filters but whose release
+# group is not in RELEASE_GROUPS are flagged as "discovered". New groups are
+# written to this config as commented entries for manual review.
+ENABLE_DISCOVERY=true
+
+# === AUTO-TAG DISCOVERED GROUPS ===
+# When true, discovered groups are added as active entries (without #) and
+# the triggering movie is tagged immediately. No need to manually uncomment
+# or run tagarr.sh for new groups.
+# When false, groups are added as commented entries for manual review.
+AUTO_TAG_DISCOVERED=false
+
+# === DISCORD NOTIFICATIONS ===
+# Send per-movie notifications when a movie is tagged or a new group is
+# discovered. Silent when nothing happens (no tag applied, no discovery).
+DISCORD_ENABLED=false
+DISCORD_WEBHOOK_URL=""
+
+# === DEBUG ===
+# When enabled, logs every filter decision for each event:
+#   - Release group, quality, size, scene name
+#   - Which groups matched and via which field (filename/scene/releaseGroup)
+#   - Quality and audio filter pass/fail per matched group
+#   - Skip reasons for non-matching groups
+#   - Discovery decisions (unknown/known, filter pass/fail)
+# Useful for verifying the script is working when no notifications are sent.
+ENABLE_DEBUG=false
+
+# === LOGGING ===
+# Main log file. Rotated automatically at 2 MiB (keeps one .old backup).
+ENABLE_LOGGING=true
+LOG_FILE="${SCRIPT_DIR}/logs/tagarr_import.log"

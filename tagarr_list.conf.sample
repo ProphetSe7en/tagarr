@@ -1,0 +1,78 @@
+# ========== CONFIGURATION ==========
+# Config for tagarr_list.sh — List-Based Movie Tagger
+#
+# Tags movies in Radarr based on external lists from TMDb or Trakt.
+# Optionally adds missing movies to Radarr as unmonitored/monitored.
+# See README.md for full documentation and usage examples.
+#
+# Flags: --dry-run | --live
+
+# Copy this file to tagarr_list.conf and fill in your values.
+
+# === PRIMARY RADARR ===
+PRIMARY_RADARR_URL="http://localhost:7878"
+PRIMARY_RADARR_API_KEY="your-api-key-here"
+PRIMARY_RADARR_NAME="Radarr"
+
+# === SECONDARY RADARR ===
+# When enabled, tags are also applied to the secondary instance.
+# Only tagging — movies are NOT added to secondary (use Radarr's own list sync).
+ENABLE_SECONDARY=false
+SECONDARY_RADARR_URL="http://localhost:7979"
+SECONDARY_RADARR_API_KEY="your-api-key-here"
+SECONDARY_RADARR_NAME="Radarr 4K"
+
+# === LIST PROVIDERS ===
+
+# TMDb API key (required for TMDb lists)
+TMDB_API_KEY="your-tmdb-api-key-here"
+
+# Trakt client ID (required for Trakt lists)
+# Create one at https://trakt.tv/oauth/applications
+TRAKT_CLIENT_ID=""
+
+# === LISTS ===
+# Format: "provider:list_id:tag_name:display_name"
+#
+# Providers:
+#   tmdb   — TMDb list (list_id = numeric ID from TMDb URL)
+#   trakt  — Trakt list (list_id = "user/list-slug", e.g. "johndoe/best-action")
+#
+# tag_name     — Tag label created in Radarr (lowercase, no spaces)
+# display_name — Human-readable name for logs
+#
+# Examples:
+#   "tmdb:12345:reference-audio:Reference Audio"
+#   "trakt:johndoe/best-action:best-action:Best Action"
+LISTS=(
+    #"tmdb:12345:my-list:My List"
+    #"trakt:user/list-slug:tag-name:Display Name"
+)
+
+# === MISSING MOVIES ===
+# When enabled, movies on the list but not in Radarr are added automatically.
+# When disabled, only existing movies in Radarr are tagged (default behavior).
+ADD_MISSING_MOVIES=false
+
+# When adding movies, set them as monitored or unmonitored.
+# Only applies when ADD_MISSING_MOVIES=true.
+#   true  = Radarr will search for and download the movie
+#   false = Movie is added but Radarr won't search for it
+ADD_MONITORED=false
+
+# Root folder path for added movies (must exist in Radarr).
+# Only applies when ADD_MISSING_MOVIES=true.
+ADD_ROOT_FOLDER="/path/to/movies"
+
+# Quality profile ID for added movies (check Radarr > Settings > Profiles).
+# Only applies when ADD_MISSING_MOVIES=true.
+ADD_QUALITY_PROFILE_ID=1
+
+# === DRY-RUN ===
+# When true, shows what would happen without making changes.
+# Override with --live flag on command line.
+ENABLE_DRY_RUN=true
+
+# === LOGGING ===
+ENABLE_LOGGING=true
+LOG_FILE="${SCRIPT_DIR}/logs/tagarr_list.log"

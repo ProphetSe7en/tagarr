@@ -1,32 +1,21 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
+# Production configs (contain API keys and URLs)
+tagarr.conf
+tagarr_import.conf
+tagarr_recover.conf
+tagarr_list.conf
+tagarr_remove.conf
+tagarr_rename.conf
 
-# Test binary, built with `go test -c`
-*.test
+# Logs
+logs/
+*.log
 
-# Code coverage profiles and other test artifacts
-*.out
-coverage.*
-*.coverprofile
-profile.cov
+# Discovery log
+discovery.log
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# Internal development files
+ORIGINAL_CRITERIA_TAG_AND_SYNC.md
+generate_samples.sh
 
-# Go workspace file
-go.work
-go.work.sum
-
-# env file
-.env
-
-# Editor/IDE
-# .idea/
-# .vscode/
+# Work copies
+work/
