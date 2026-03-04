@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # -----------------------------------------------------------------------------
 # Tagarr Recover — Release Group Recovery from Grab History
-# Version: 1.0.0
+# Version: 1.0.1
 #
 # Scans movies in Radarr where the release group is missing or unknown,
 # and recovers it from the grab history. This fixes movies where the
@@ -37,7 +37,7 @@
 # -----------------------------------------------------------------------------
 
 set -euo pipefail
-SCRIPT_VERSION="1.0.0"
+SCRIPT_VERSION="1.0.1"
 
 ########################################
 # CONFIG LOADING
