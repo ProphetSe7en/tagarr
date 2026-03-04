@@ -393,7 +393,6 @@ _find_imported_grab_group() {
         [.eventType, ((.data.releaseGroup // "" | if . == "" then "__NONE__" else . end)), (.sourceTitle // "")] | @tsv
     ') || return 1
     local state="unknown"
-    local found_empty_verified=false
     while IFS=$'\t' read -r event_type grab_rg source_title; do
         case "$event_type" in
             downloadFolderImported|movieFileImported) state="imported" ;;
@@ -401,10 +400,10 @@ _find_imported_grab_group() {
             grabbed)
                 if [ "$state" = "failed" ]; then state="unknown"; continue; fi
                 if [ "$state" != "imported" ]; then state="unknown"; continue; fi
+                # First verified grab = the one that produced the current file.
+                # If empty, stop here — do NOT fall back to older grabs (different files).
                 if [ "$grab_rg" = "__NONE__" ]; then
-                    found_empty_verified=true
-                    state="unknown"
-                    continue
+                    return 2
                 fi
                 local source_lower="${source_title,,}" title_lower="${movie_title,,}"
                 local title_word
@@ -428,9 +427,6 @@ _find_imported_grab_group() {
                 ;;
         esac
     done <<< "$events_tsv"
-    if [ "$found_empty_verified" = "true" ]; then
-        return 2
-    fi
     return 1
 }
 

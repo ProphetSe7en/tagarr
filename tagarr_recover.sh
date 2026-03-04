@@ -269,7 +269,6 @@ find_imported_grab_group() {
 
     # State tracks what happened AFTER the grab we're about to see
     local state="unknown"
-    local found_empty_verified=false
 
     while IFS=$'\t' read -r event_type grab_rg source_title; do
         case "$event_type" in
@@ -292,12 +291,11 @@ find_imported_grab_group() {
                     continue
                 fi
 
-                # This grab was followed by a successful import
-                # Check if releaseGroup is empty — track but continue looking
+                # This grab was followed by a successful import — it produced the current file.
+                # If releaseGroup is empty, this IS the answer: the release has no group.
+                # Do NOT continue to older grabs (they belong to previous files).
                 if [ "$grab_rg" = "__NONE__" ]; then
-                    found_empty_verified=true
-                    state="unknown"
-                    continue
+                    return 2
                 fi
 
                 # Title+year verification — require BOTH when both are available
@@ -343,11 +341,6 @@ find_imported_grab_group() {
                 ;;
         esac
     done <<< "$events_tsv"
-
-    # Distinguish: verified grab with empty group vs no verified grab at all
-    if [ "$found_empty_verified" = "true" ]; then
-        return 2
-    fi
 
     return 1
 }
