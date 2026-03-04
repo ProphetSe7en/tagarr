@@ -14,7 +14,7 @@ logs/
 discovery.log
 
 # Internal development files
-ORIGINAL_CRITERIA_TAG_AND_SYNC.md
+DESIGN_NOTES.md
 generate_samples.sh
 
 # Work copies

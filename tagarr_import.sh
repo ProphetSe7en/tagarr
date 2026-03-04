@@ -116,7 +116,7 @@ if [ "$EVENT_TYPE" = "Test" ]; then
         log "INFO" "Sending Discord test notification..."
         payload=$(jq -n \
             --argjson color 16753920 \
-            --arg footer_text "Tagarr Import v${SCRIPT_VERSION} by ProphetSe7en • $(date '+%d-%m-%Y %H:%M')" \
+            --arg footer_text "Tagarr Import v${SCRIPT_VERSION} by ProphetSe7en" \
             --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
             '{
                 embeds: [{
@@ -1079,7 +1079,7 @@ if [ "${DISCORD_ENABLED:-false}" = "true" ] && { [ "$tagged" = "true" ] || [ "$d
         --argjson color "$notif_color" \
         --arg poster_url "$MOVIE_POSTER_URL" \
         --argjson fields "$fields_json" \
-        --arg footer_text "Tagarr Import v${SCRIPT_VERSION} by ProphetSe7en • $(date '+%d-%m-%Y %H:%M')" \
+        --arg footer_text "Tagarr Import v${SCRIPT_VERSION} by ProphetSe7en" \
         --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
         '{
             embeds: [{

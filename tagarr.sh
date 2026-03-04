@@ -178,7 +178,7 @@ send_discord_summary() {
 
   local notif_color=16753920  # Orange (0xFFA500)
   local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
-  local footer_text="Tagarr v${SCRIPT_VERSION} by ProphetSe7en • $(date '+%d-%m-%Y %H:%M')"
+  local footer_text="Tagarr v${SCRIPT_VERSION} by ProphetSe7en"
 
   # Build primary field value with actual newline
   local primary_value="Tagged: ${total_primary_tagged}
@@ -426,7 +426,7 @@ send_discord_discovery() {
 
   local notif_color=16766720  # Gold (0xFFD700)
   local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
-  local footer_text="Tagarr v${SCRIPT_VERSION} by ProphetSe7en • $(date '+%d-%m-%Y %H:%M')"
+  local footer_text="Tagarr v${SCRIPT_VERSION} by ProphetSe7en"
 
   local payload
   payload=$(jq -n \

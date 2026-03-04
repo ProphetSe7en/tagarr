@@ -404,7 +404,7 @@ send_discord_summary() {
         --arg title "Recover — ${instance_name}" \
         --argjson color "$color" \
         --argjson fields "$fields_json" \
-        --arg footer_text "Tagarr Recover v${SCRIPT_VERSION} by ProphetSe7en • $(date '+%d-%m-%Y %H:%M')" \
+        --arg footer_text "Tagarr Recover v${SCRIPT_VERSION} by ProphetSe7en" \
         --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
         '{
             embeds: [{
