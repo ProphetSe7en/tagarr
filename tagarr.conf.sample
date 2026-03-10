@@ -87,4 +87,4 @@ PROGRESS_INTERVAL=50
 # === TAG CLEANUP ===
 # When enabled, tags defined in RELEASE_GROUPS that have 0 movies assigned
 # are deleted from Radarr at the end of each run.
-CLEANUP_UNUSED_TAGS=true
+CLEANUP_UNUSED_TAGS=false
