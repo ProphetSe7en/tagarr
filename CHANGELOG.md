@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.3.2 — 2026-03-10
+
+Fix for upgrades applying the previous file's release group.
+
+### Fixed
+
+- **Upgrade release group bug** — During upgrades, the history-based recovery
+  could pick up the OLD file's release group (e.g., BHDStudio) instead of the
+  new one (e.g., GiLG). This happened because Radarr Connect fires before the
+  new import event is written to history.
+- **Fix:** Use `radarr_release_releasegroup` environment variable from Radarr
+  Connect as the primary source for release group. This always contains the
+  correct group for the current download. Also patches the moviefile via API
+  so rename uses the correct group.
+- History recovery remains as fallback for empty/Unknown groups (e.g., manual
+  imports or standalone script runs).
+
+## v1.3.1 — 2026-03-04
+
+Renamed fixgrp to recover, code review fixes, branding.
+
+### Changed
+
+- `tagarr_fixgrp.sh` renamed to `tagarr_recover.sh` (consistent verb pattern)
+- Discord footer branding: "by ProphetSe7en" on all notification scripts
+- 5 medium code review findings fixed
+
 ## v1.3.0 — 2026-03-03
 
 Release group recovery from grab history.

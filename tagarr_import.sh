@@ -33,7 +33,7 @@
 # Test with a single movie before enabling as a Radarr Connect handler.
 # -----------------------------------------------------------------------------
 
-SCRIPT_VERSION="1.3.1"
+SCRIPT_VERSION="1.3.2"
 
 ########################################
 # CONFIG LOADING
@@ -75,6 +75,7 @@ EVENT_TYPE="${radarr_eventtype:-Test}"
 MOVIE_ID="${radarr_movie_id:-0}"
 MOVIE_FILE_RELATIVE="${radarr_moviefile_relativepath:-}"
 MOVIE_FILE_SCENE="${radarr_moviefile_scenename:-}"
+RELEASE_GROUP_FROM_EVENT="${radarr_release_releasegroup:-}"
 
 ################################################################################
 # LOGGING AND LOG ROTATION
@@ -599,10 +600,37 @@ if [ "${ENABLE_DEBUG:-false}" = "true" ]; then
     log "DEBUG" "Scene: ${MOVIE_FILE_SCENE:-none}"
 fi
 
-# Get file info for matching
+# Get file info for matching — priority: event variable > API > history recovery
 RELEASE_GROUP_FIELD=$(echo "$movie_json" | jq -r '.movieFile.releaseGroup // ""')
 
-# --- Release group recovery from grab history ---
+# --- Release group from Radarr Connect event (most reliable during import/upgrade) ---
+if [ -n "$RELEASE_GROUP_FROM_EVENT" ] && [ "$RELEASE_GROUP_FROM_EVENT" != "null" ]; then
+    if [ -z "$RELEASE_GROUP_FIELD" ] || [ "$RELEASE_GROUP_FIELD" = "Unknown" ] || [ "$RELEASE_GROUP_FIELD" = "null" ]; then
+        log "INFO" "Using release group from event: '$RELEASE_GROUP_FROM_EVENT' (API had: '${RELEASE_GROUP_FIELD:-empty}')"
+        RELEASE_GROUP_FIELD="$RELEASE_GROUP_FROM_EVENT"
+        MOVIE_RELEASE_GROUP="$RELEASE_GROUP_FROM_EVENT"
+        RECOVER_GROUP="$RELEASE_GROUP_FROM_EVENT"
+        # Also patch the moviefile in Radarr so rename uses the correct group
+        _moviefile_id=$(echo "$movie_json" | jq -r '.movieFile.id // ""')
+        if [ -n "$_moviefile_id" ] && [ "$_moviefile_id" != "null" ]; then
+            _moviefile_json=$(curl -s -f "${PRIMARY_RADARR_API_URL}/moviefile/${_moviefile_id}?apikey=${PRIMARY_RADARR_API_KEY}") || _moviefile_json=""
+            if [ -n "$_moviefile_json" ] && [ "$_moviefile_json" != "null" ]; then
+                _updated=$(echo "$_moviefile_json" | jq --arg rg "$RELEASE_GROUP_FROM_EVENT" '.releaseGroup = $rg')
+                _put_resp=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X PUT \
+                    "${PRIMARY_RADARR_API_URL}/moviefile/${_moviefile_id}?apikey=${PRIMARY_RADARR_API_KEY}" \
+                    -H "Content-Type: application/json" -d "$_updated")
+                _put_code=$(echo "$_put_resp" | grep "HTTP_CODE:" | tail -1 | cut -d: -f2)
+                if [ "$_put_code" = "200" ] || [ "$_put_code" = "202" ]; then
+                    log "INFO" "Patched moviefile releaseGroup to '$RELEASE_GROUP_FROM_EVENT'"
+                else
+                    log "WARN" "Failed to patch moviefile releaseGroup (HTTP $_put_code)"
+                fi
+            fi
+        fi
+    fi
+fi
+
+# --- Release group recovery from grab history (fallback for empty/Unknown) ---
 if [ "${ENABLE_RECOVER:-true}" = "true" ] && \
    { [ -z "$RELEASE_GROUP_FIELD" ] || [ "$RELEASE_GROUP_FIELD" = "Unknown" ] || [ "$RELEASE_GROUP_FIELD" = "null" ]; }; then
     _moviefile_id=$(echo "$movie_json" | jq -r '.movieFile.id // ""')
