@@ -35,8 +35,11 @@ SECONDARY_RADARR_NAME="Radarr 4K"
 # Commented entries (#) are ignored for tagging but counted as "known" by
 # discovery, so the same group won't be re-discovered.
 RELEASE_GROUPS=(
-    "flux:flux:FLUX:filtered"
-    "sic:sic:SiC:filtered"
+    "thefarm:thefarm:TheFarm:filtered"         # Only MA/Play + lossless
+    "flux:flux:FLUX:filtered"                  # Only MA/Play + lossless
+    "sic:sic:SIC:filtered"                     # Only MA/Play + lossless
+    "126811:126811:126811:filtered"             # Only MA/Play + lossless
+    "xebec:xebec:XEBEC:filtered"              # Only MA/Play + lossless
     #"groupname:tagname:DisplayName:filtered"
 )
 
