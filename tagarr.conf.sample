@@ -85,6 +85,7 @@ LOG_FILE="${SCRIPT_DIR}/logs/tagarr.log"
 PROGRESS_INTERVAL=50
 
 # === TAG CLEANUP ===
-# When enabled, tags defined in RELEASE_GROUPS that have 0 movies assigned
-# are deleted from Radarr at the end of each run.
+# When enabled, tags defined in RELEASE_GROUPS above that have 0 movies
+# assigned are deleted from Radarr at the end of each run.
+# Only affects tags managed by this script — other Radarr tags are never touched.
 CLEANUP_UNUSED_TAGS=false
