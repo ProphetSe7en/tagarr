@@ -1,8 +1,20 @@
 # ========== CONFIGURATION ==========
-# Config for tagarr_import.sh — Event-Driven Radarr Tagger
+# Config for tagarr_import.sh — Event-Driven Radarr Tagger with Discovery
 #
-# Radarr Connect handler (On Download / On Upgrade / On File Delete).
-# Separate from tagarr.conf — both configs are independent.
+# This file controls all behavior of tagarr_import.sh. The script runs as a
+# Radarr Connect handler (On Download / On Upgrade / On File Delete). It tags
+# individual movies by release group when quality and audio filters match,
+# optionally syncs tags to a secondary instance, and discovers new groups.
+#
+# Separate from tagarr.conf — both configs are independent and can have
+# different release groups, webhooks, and filter settings.
+#
+# Notification behavior:
+#   - Tagged movie  → Discord embed (orange) with tags and poster
+#   - Discovered    → Discord embed (gold) with new group info
+#   - No match      → Silent (no notification)
+#   - Test event    → Confirmation embed with version and status
+#
 # See README.md for setup instructions and full documentation.
 
 # Copy this file to tagarr_import.conf and fill in your values.

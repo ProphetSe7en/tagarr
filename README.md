@@ -1,10 +1,30 @@
 # Tagarr
 
-A collection of bash scripts for automated movie tagging in [Radarr](https://radarr.video/).
+Automated movie tagging for [Radarr](https://radarr.video/) based on release groups.
 
-Tag movies by release group with quality and audio filtering, sync tags across
-dual Radarr instances, discover new release groups automatically, tag from
-TMDb/Trakt lists, and recover missing release groups from grab history.
+## What Does This Do?
+
+When you download movies through Radarr, each release comes from a **release group** (like FLUX, BHD, FraMeSToR, etc.). Some groups consistently deliver premium quality — lossless audio (TrueHD Atmos, DTS:X), high-bitrate encodes, or WEB-DLs from premium sources like Movies Anywhere.
+
+Tagarr automatically **tags movies in Radarr** based on which release group made the file. This lets you:
+
+- **Build smart collections** — filter your library by release group quality
+- **Track what you have** — see at a glance which movies came from premium groups
+- **Filter with quality gates** — only tag releases that meet your audio/video standards
+- **Discover new groups** — automatically find groups you haven't seen before that pass your filters
+- **Sync across instances** — mirror tags between HD and 4K Radarr
+
+### Example
+
+You configure Tagarr with the release group FLUX in `filtered` mode. Tagarr scans your library and finds:
+
+| Movie | Release Group | Source | Audio | Result |
+|-------|--------------|--------|-------|--------|
+| Inception.2010.MA.WEB-DL.TrueHD.Atmos-FLUX | FLUX | MA WEB-DL | TrueHD Atmos | Tagged `flux` |
+| Dune.2021.AMZN.WEB-DL.AAC-FLUX | FLUX | Amazon WEB-DL | AAC | **Not tagged** (fails audio filter) |
+| Oppenheimer.2023.BluRay.Remux.TrueHD.Atmos-FraMeSToR | FraMeSToR | BluRay | TrueHD Atmos | **Not tagged** (different group) |
+
+The `flux` tag appears in Radarr and you can use it in filters, collections, or custom formats.
 
 > **Warning:** These scripts modify Radarr metadata (tags, release groups) and
 > can trigger file renames. Always run in dry-run mode first and review the
@@ -14,93 +34,95 @@ TMDb/Trakt lists, and recover missing release groups from grab history.
 
 ---
 
-## Scripts
+## Getting Started
 
-| Script | Purpose | Trigger |
-|--------|---------|---------|
-| `tagarr.sh` | Batch tagger — scans all movies | Cron / manual |
-| `tagarr_import.sh` | Event-driven tagger — processes one movie | Radarr Connect |
-| `tagarr_recover.sh` | Release group recovery from grab history | Manual |
-| `tagarr_list.sh` | Tag from TMDb/Trakt lists | Manual |
-| `tagarr_remove.sh` | Bulk tag removal | Manual |
-| `tagarr_rename.sh` | Bulk tag rename | Manual |
-
-All scripts default to **dry-run mode** — no changes are made until you
-explicitly use `--live`.
-
----
-
-## Requirements
-
-- **Radarr** v3+ (uses API v3)
-- **bash** 4+
-- **jq** (JSON processing)
-- **curl** (API calls)
-- **grep**, **sed**, **awk** (text processing)
-
----
-
-## Installation
+### 1. Install
 
 ```bash
-# Clone the repository
 git clone https://github.com/prophetse7en/tagarr.git
 cd tagarr
-
-# Copy sample configs and fill in your values
-cp tagarr.conf.sample tagarr.conf
-cp tagarr_import.conf.sample tagarr_import.conf
-# ... repeat for any other scripts you want to use
-
-# Make scripts executable (should already be, but just in case)
 chmod +x tagarr*.sh
+```
 
-# Edit your config with API keys, URLs, and release groups
+**Requirements:** Radarr v3+, bash 4+, jq, curl
+
+### 2. Configure
+
+```bash
+cp tagarr.conf.sample tagarr.conf
 nano tagarr.conf
 ```
 
----
-
-## Quick Start
+Fill in three things:
 
 ```bash
-# 1. Configure your Radarr URL and API key in tagarr.conf
+# Your Radarr URL and API key (Settings > General in Radarr)
+PRIMARY_RADARR_URL="http://localhost:7878"
+PRIMARY_RADARR_API_KEY="your-api-key-here"
 
-# 2. Dry-run — see what would be tagged (no changes)
+# Release groups you want to tag
+RELEASE_GROUPS=(
+    "flux:flux:FLUX:filtered"       # Only tag if quality+audio filters pass
+    "sparks:sparks:SPARKS:simple"   # Tag all releases from this group
+)
+```
+
+Each release group entry has 4 fields separated by `:` — `search_string:tag_name:display_name:mode`
+
+| Mode | Behavior |
+|------|----------|
+| `filtered` | Only tags if the release also passes your quality and audio filters (MA/Play WEB-DL + lossless audio) |
+| `simple` | Tags every release from this group regardless of quality |
+
+### 3. Test with Dry-Run
+
+```bash
+# See what would be tagged — no changes are made
 ./tagarr.sh --dry-run
+```
 
-# 3. Discovery — find release groups passing your filters
-./tagarr.sh --discover
+Review the output. If it looks right:
 
-# 4. Review discovered groups in your config, uncomment to activate
-
-# 5. Live run — apply tags
+```bash
+# Apply the tags
 ./tagarr.sh
 ```
 
+### 4. Set Up Automatic Tagging (Optional)
+
+For new downloads to be tagged automatically, set up `tagarr_import.sh` as a Radarr Connect script:
+
+1. Copy config: `cp tagarr_import.conf.sample tagarr_import.conf` and fill in your values
+2. In Radarr: Settings > Connect > + > **Custom Script**
+3. Path: full path to `tagarr_import.sh`
+4. Events: **On Download**, **On Upgrade**, **On File Delete**
+
+Now every new import is tagged instantly. Run `tagarr.sh` on a schedule (cron, Cronicle, etc.) as a catch-up for anything missed.
+
 ---
 
-## Configuration
+## Scripts
 
-Each script has its own `.conf` file. Copy the `.conf.sample` and fill in
-your values. The sample files contain descriptions for every option.
+| Script | What It Does | When to Use |
+|--------|-------------|-------------|
+| `tagarr.sh` | Scans all movies, tags by release group | Schedule daily/weekly or run manually |
+| `tagarr_import.sh` | Tags one movie on import/upgrade/delete | Radarr Connect (automatic) |
+| `tagarr_recover.sh` | Fixes missing release groups from grab history | When Radarr lost the release group on import |
+| `tagarr_list.sh` | Tags movies from TMDb/Trakt lists | Curated collections (awards, directors, etc.) |
+| `tagarr_remove.sh` | Removes tags from all movies | Cleanup old/unwanted tags |
+| `tagarr_rename.sh` | Renames tags (old→new, migrates movies) | Rename a tag without losing assignments |
 
-### Radarr Connection
+All scripts default to **dry-run mode** — no changes are made until you pass `--live`.
 
-All configs require at minimum:
+---
 
-```bash
-PRIMARY_RADARR_URL="http://localhost:7878"
-PRIMARY_RADARR_API_KEY="your-api-key-here"
-PRIMARY_RADARR_NAME="Radarr"
-```
+## Configuration Reference
 
-Find your API key in Radarr under Settings > General.
+Each script has its own `.conf` file. Copy the `.conf.sample` and edit it — every option is documented inside the sample file.
 
 ### Dual Instance Support
 
-All scripts support a secondary Radarr instance. Tags are synced from
-primary to secondary for movies that exist in both (matched by TMDb ID).
+If you run two Radarr instances (e.g., HD + 4K), tags are automatically synced from primary to secondary for movies that exist in both (matched by TMDb ID):
 
 ```bash
 ENABLE_SYNC_TO_SECONDARY=true
@@ -109,73 +131,52 @@ SECONDARY_RADARR_API_KEY="your-api-key-here"
 SECONDARY_RADARR_NAME="Radarr 4K"
 ```
 
-### Release Groups
-
-Used by `tagarr.sh` and `tagarr_import.sh`. Each entry defines a release
-group to tag:
+### Release Group Format
 
 ```bash
 RELEASE_GROUPS=(
-    "flux:flux:FLUX:filtered"
+    "flux:flux:FLUX:filtered"       # search_string:tag_name:display_name:mode
     "btbn:btbn:BTBN:filtered"
     "sic:sic:SiC:simple"
+    #"rejected:rejected:Rejected:filtered"   # Commented = known but not tagged
 )
 ```
 
-| Field | Description |
-|-------|-------------|
-| `search_string` | Lowercase string matched against releaseGroup (word boundary) |
-| `tag_name` | Tag label created in Radarr (lowercase, no spaces) |
-| `display_name` | Human-readable name for logs and Discord |
-| `mode` | `filtered` = require quality+audio match; `simple` = tag any match |
+- **search_string** — matched against Radarr's releaseGroup field (case-insensitive, word boundary)
+- **tag_name** — the tag created in Radarr (lowercase, no spaces)
+- **display_name** — shown in logs and Discord notifications
+- **mode** — `filtered` (must pass quality + audio filters) or `simple` (tag everything from this group)
 
-Commented entries (`#"group:..."`) are ignored for tagging but counted as
-"known" by discovery, preventing re-discovery of groups already reviewed.
+Commented entries are tracked so discovery won't re-suggest groups you've already reviewed.
 
-### Quality Filters
+### Quality and Audio Filters
 
-When `ENABLE_QUALITY_FILTER=true`, `filtered` mode groups only tag movies
-whose filename contains one of the enabled quality sources:
+These only apply to `filtered` mode groups. Enable the sources and codecs you consider premium:
 
-| Toggle | Matches |
-|--------|---------|
-| `ENABLE_MA_WEBDL` | Movies Anywhere WEB-DL |
-| `ENABLE_PLAY_WEBDL` | Google Play WEB-DL |
+```bash
+# Quality sources (WEB-DL origin)
+ENABLE_QUALITY_FILTER=true
+ENABLE_MA_WEBDL=true       # Movies Anywhere
+ENABLE_PLAY_WEBDL=true     # Google Play
 
-Supports both standard dot naming (`MA.WEBDL-2160p`) and bracket naming
-(`[MA][WEBDL-2160p]`).
+# Lossless audio codecs
+ENABLE_AUDIO_FILTER=true
+ENABLE_TRUEHD_ATMOS=true   # Dolby TrueHD Atmos
+ENABLE_TRUEHD=true         # Dolby TrueHD (without Atmos)
+ENABLE_DTS_X=true          # DTS:X
+ENABLE_DTS_HD_MA=true      # DTS-HD Master Audio
+```
 
-### Audio Filters
+Transcoded or upmixed audio is automatically rejected.
 
-When `ENABLE_AUDIO_FILTER=true`, `filtered` mode groups only tag movies
-whose filename contains one of the enabled lossless audio codecs:
-
-| Toggle | Matches |
-|--------|---------|
-| `ENABLE_TRUEHD` | Dolby TrueHD (without Atmos) |
-| `ENABLE_TRUEHD_ATMOS` | Dolby TrueHD Atmos |
-| `ENABLE_DTS_X` | DTS:X |
-| `ENABLE_DTS_HD_MA` | DTS-HD Master Audio |
-
-Transcoded or upmixed audio is automatically rejected (`upmix`, `encode`,
-`transcode`, etc.).
-
-### Discord Notifications
-
-All scripts support Discord webhook notifications with embeds:
+### Discord and Logging
 
 ```bash
 DISCORD_ENABLED=true
 DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/your-webhook-url"
-```
 
-### Logging
-
-All scripts write to log files with automatic rotation at 2 MiB:
-
-```bash
 ENABLE_LOGGING=true
-LOG_FILE="${SCRIPT_DIR}/logs/tagarr.log"
+LOG_FILE="${SCRIPT_DIR}/logs/tagarr.log"   # Auto-rotated at 2 MiB
 ```
 
 ---
@@ -184,203 +185,56 @@ LOG_FILE="${SCRIPT_DIR}/logs/tagarr.log"
 
 ### tagarr.sh — Batch Tagger
 
-Scans all movies in Radarr and tags them by release group. Intended for
-scheduled runs (cron, Cronicle, etc.) to catch up on any movies that
-were missed by the event-driven tagger.
+Scans your entire library and tags movies by release group. Run on a schedule as a catch-up for anything the event-driven tagger missed.
 
-**Features:**
-- Tag movies by release group with quality + audio filtering
-- Lazy tag creation — tags only created when a movie actually matches
-- Tag removal when movies no longer match criteria
-- Sync tags to secondary Radarr instance
-- Discovery — auto-detect unknown groups passing all filters
-- Cleanup — remove tags with 0 movies at end of run
-- Debug mode — detailed per-movie filter breakdown
-
-**Flags:**
-
-| Flag | Description |
-|------|-------------|
-| `--dry-run` | Simulate all changes without modifying Radarr |
-| `--tag NAME` | Only process specific tags (comma-separated) |
-| `--discover` | Discovery-only mode — scan for new groups, no tagging |
-| `--help` | Show usage information |
-
----
+```bash
+./tagarr.sh --dry-run          # Preview changes (safe)
+./tagarr.sh                    # Apply tags
+./tagarr.sh --discover         # Only scan for new groups, no tagging
+./tagarr.sh --tag flux,sic     # Only process specific groups
+```
 
 ### tagarr_import.sh — Event-Driven Tagger
 
-Radarr Connect handler that processes individual movies on import, upgrade,
-or file delete. Uses the same release group + quality + audio filtering as
-`tagarr.sh` but runs per-event instead of scanning all movies.
+Runs automatically via Radarr Connect on every download, upgrade, or file delete. Tags the movie instantly using the same filters as `tagarr.sh`.
 
-**Features:**
-- Tags individual movies on Download / Upgrade / File Delete events
-- Release group recovery from grab history (`ENABLE_RECOVER`) — fixes missing
-  release groups inline before tagging, triggers rename, shows before/after
-  filename in Discord
-- Auto-tag discovery (`AUTO_TAG_DISCOVERED`) — new groups are added to config
-  as active entries and the triggering movie is tagged immediately
-- Syncs tags to secondary Radarr instance
-- Discovery — unknown groups written to config (commented or active)
-- Smart notifications — only sends Discord when tagged, discovered, or fixed
-- File delete cleanup — removes all managed tags when a file is deleted
+**Setup:** Radarr > Settings > Connect > Custom Script > path to `tagarr_import.sh` > Events: On Download, On Upgrade, On File Delete
 
-**Setup in Radarr:**
-1. Settings > Connect > + > Custom Script
-2. Path: point to `tagarr_import.sh`
-3. Events: On Download, On Upgrade, On File Delete
+Extra features beyond `tagarr.sh`:
+- **Release group recovery** — fixes missing groups from grab history before tagging
+- **Auto-tag discovery** — optionally adds new groups as active (no manual review needed)
+- **File delete cleanup** — removes all managed tags when a movie file is deleted
 
-**Note:** `tagarr_import.conf` is separate from `tagarr.conf`. Both configs
-can have different release groups, webhooks, and filter settings.
-
----
+Uses its own config file (`tagarr_import.conf`), separate from `tagarr.conf`.
 
 ### tagarr_recover.sh — Release Group Recovery
 
-Some release groups (e.g., `126811`) include the group name in the indexer
-release title but NOT in the actual filename inside the torrent. When Radarr
-imports, it re-parses from the filename and loses the release group. The
-grab history still has the correct data.
+Fixes movies where Radarr lost the release group during import. This happens when the group name is in the indexer title but not in the actual filename inside the torrent.
 
-This script scans movies with missing release groups, verifies the correct
-group from grab history, and patches it into Radarr's moviefile metadata.
-The script does NOT rename files itself — it sends a `RenameFiles` command
-to Radarr, which handles the actual rename according to your naming format.
-
-This same recovery logic is also built into `tagarr_import.sh` so new
-imports are fixed automatically before tagging proceeds.
-
-**Safety chain:**
-
-The script uses a 5-point safety chain to prevent incorrect fixes:
-
-1. **Blanks only** — never overwrites an existing release group
-2. **Filename check** — parses the actual filename for an existing release
-   group. If one is found but Radarr has none, the movie is flagged for
-   manual review instead of fixed
-3. **Import-verified grab** — walks all history events and only uses grabs
-   that were followed by a successful import. Skips failed downloads to
-   prevent wrong group assignment
-4. **Non-empty** — release group from history must have a value
-5. **Title+year match** — grab sourceTitle must match the movie's title or year
-
-**Flags:**
-
-| Flag | Description |
-|------|-------------|
-| `--dry-run` | Preview what would be fixed (default) |
-| `--live` | Execute the fixes |
-| `--instance TYPE` | `primary`, `secondary`, or `both` (default: both) |
-| `--movie ID` | Process a single movie by Radarr movie ID |
-| `--no-rename` | Skip file rename even in live mode |
-| `--help` | Show usage information |
-
-**Usage:**
+The script checks grab history, verifies the correct group through a 5-point safety chain (blank-only, filename cross-check, import-verified grab, non-empty, title+year match), and patches it back.
 
 ```bash
-# Preview all affected movies (default)
-./tagarr_recover.sh
-
-# Test on a single movie
-./tagarr_recover.sh --movie 123
-
-# Fix a single movie (live)
-./tagarr_recover.sh --movie 123 --live
-
-# Fix all affected movies
-./tagarr_recover.sh --live
-
-# Fix without renaming files
-./tagarr_recover.sh --live --no-rename
+./tagarr_recover.sh                    # Preview all (dry-run)
+./tagarr_recover.sh --movie 123        # Preview one movie
+./tagarr_recover.sh --movie 123 --live # Fix one movie
+./tagarr_recover.sh --live             # Fix all
 ```
-
----
 
 ### tagarr_list.sh — List-Based Tagger
 
-Tags movies based on external lists from TMDb or Trakt. Matches list entries
-against existing Radarr movies by TMDb ID. Optionally adds missing movies.
-
-**Features:**
-- Fetch movie lists from TMDb and Trakt APIs
-- Tag existing Radarr movies that appear on configured lists
-- Optionally add missing movies to Radarr (monitored or unmonitored)
-- Sync tags to secondary Radarr instance
-- Bulk API operations via `/movie/editor`
-
-**Use cases:**
-- Curated collections (Reference Audio, Reference Video)
-- Awards lists (Oscar Winners, IMDb Top 250)
-- Director/Actor filmographies
-- Trakt community lists
-
-**List configuration:**
+Tags movies from TMDb or Trakt lists. Useful for curated collections (Reference Audio, Oscar Winners, director filmographies, etc.).
 
 ```bash
+# In tagarr_list.conf:
 LISTS=(
-    "tmdb:LIST_ID:tag-name:Display Name"
-    "trakt:user/list-slug:tag-name:Display Name"
+    "tmdb:12345:ref-audio:Reference Audio"
+    "trakt:user/list-slug:oscar-winners:Oscar Winners"
 )
 ```
 
-| Field | Description |
-|-------|-------------|
-| `provider` | `tmdb` or `trakt` |
-| `list_id` | TMDb numeric ID or Trakt `user/list-slug` |
-| `tag_name` | Tag label created in Radarr (lowercase, no spaces) |
-| `display_name` | Human-readable name for logs |
+### tagarr_remove.sh / tagarr_rename.sh — Tag Management
 
-Requires `TMDB_API_KEY` and/or `TRAKT_CLIENT_ID` depending on which
-providers you use.
-
-**Flags:**
-
-| Flag | Description |
-|------|-------------|
-| `--dry-run` | Preview mode (default) |
-| `--live` | Execute tagging and additions |
-
----
-
-### tagarr_remove.sh — Bulk Tag Removal
-
-Removes specified tags from all movies across one or two Radarr instances.
-Optionally deletes the tag definitions from Radarr.
-
-```bash
-TAGS_TO_REMOVE=(
-    "old-tag-name"
-    "another-tag"
-)
-```
-
-**Flags:**
-
-| Flag | Description |
-|------|-------------|
-| `--dry-run` | Preview mode (default) |
-| `--live` | Execute removals |
-
----
-
-### tagarr_rename.sh — Bulk Tag Rename
-
-Renames tags by creating a new tag, migrating all movies, and removing the
-old tag. Three-step process: create new, migrate, remove old.
-
-```bash
-TAG_RENAMES=(
-    "old-name:new-name"
-)
-```
-
-**Flags:**
-
-| Flag | Description |
-|------|-------------|
-| `--dry-run` | Preview mode (default) |
-| `--live` | Execute renames |
+Bulk remove or rename tags across one or both instances. Both default to dry-run.
 
 ---
 
