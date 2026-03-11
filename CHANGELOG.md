@@ -1,5 +1,33 @@
 # Changelog
 
+## v1.3.3 — 2026-03-11
+
+Rewrite release group recovery to use exact download ID matching.
+
+### Fixed
+
+- **Recovery accuracy** — The old recover function walked Radarr history
+  newest-to-oldest looking for an import→grab pair. During upgrades, the new
+  import event isn't in history yet when Connect fires, causing recover to find
+  the wrong grab from an older file (e.g., ZR instead of DRX).
+- **New approach** — Uses `radarr_download_id` (available on every import event)
+  to match the exact grab in history. No walking, no guessing.
+
+### Changed
+
+- **Priority chain** — `tagarr_import.sh` now resolves release groups in order:
+  1. `radarr_moviefile_releasegroup` (direct from imported file)
+  2. `movieFile.releaseGroup` (Radarr API)
+  3. `downloadId` → grab history lookup (exact match)
+- **Discovery requirement clarified** — Discovery only works when a release
+  group is known. Movies with no recoverable group are silently skipped.
+
+### Added
+
+- **`tagarr_debug.sh`** — Debug script for inspecting Radarr Connect event
+  variables. Logs all `radarr_*` environment variables to help troubleshoot
+  import issues.
+
 ## v1.3.2 — 2026-03-10
 
 Fix for upgrades applying the previous file's release group.

@@ -271,6 +271,70 @@ re-discovered, so you can leave rejected groups commented as a record.
 
 ---
 
+## Troubleshooting
+
+### "My movie wasn't tagged"
+
+If a movie was imported but no tag appeared in Radarr, work through this checklist:
+
+1. **Is the release group in your config?** Check `RELEASE_GROUPS` in your `.conf` file. The group must be listed and uncommented (not starting with `#`).
+
+2. **Is the group in `filtered` mode but failing filters?** If the entry uses `:filtered`, the release must also pass your quality and audio filters. A FLUX release from Amazon WEB-DL with AAC audio won't be tagged if your audio filter requires lossless. Try changing to `:simple` temporarily to confirm.
+
+3. **Does Radarr actually know the release group?** Go to the movie in Radarr and check the file details. If the **Release Group** column is empty, there's nothing for Tagarr to match against. See the next section.
+
+4. **Did the import script run?** Check Radarr > System > Events for errors from the Connect script. Also check the Tagarr log file if logging is enabled.
+
+### "The release group is empty in Radarr"
+
+This is the most common issue. Radarr determines the release group by parsing the filename — specifically, it looks for a `-` separator before the group name. If the release group is missing from Radarr, one of these is the cause:
+
+**The filename has no release group separator.** Radarr expects the group after a hyphen: `Movie.2024.1080p.WEB-DL-GROUP`. If the filename uses a dot instead (`Movie.2024.1080p.WEB-DL.GROUP`), Radarr won't parse it and the release group field stays empty. This is an indexer/release naming issue, not something Tagarr can fix.
+
+Here the grab title ends with `.DRX` (dot separator) instead of `-DRX`. Radarr does not recognize this as a release group:
+
+![Dot separator — Radarr doesn't parse .DRX as a release group](screenshots/troubleshoot-dot-separator.png)
+
+This also affects well-known groups. Here FLUX appears with a dot separator (`.FLUX`), causing Radarr to show **No-RlsGroup**:
+
+![No-RlsGroup — even FLUX is missed when the separator is a dot](screenshots/troubleshoot-no-rlsgroup.png)
+
+**The indexer title had the group, but the actual filename inside the torrent didn't.** The indexer listing might show `Movie.2024.1080p.WEB-DL-GROUP` but the file inside the torrent is `Movie.2024.1080p.WEB-DL.mkv` (no group at all). Radarr grabs based on the indexer title but imports based on the actual file. This is what `tagarr_recover.sh` and the import script's recovery function are designed to fix — they look up the grab event in history and patch the group back.
+
+**No grab history exists for this movie.** Recovery depends on Radarr having a grab event in its history. If the movie was manually imported (drag-and-drop, manual import in Radarr), there is no grab event and recovery has nothing to work with. Similarly, if Radarr's history has been cleared, the grab events are gone.
+
+### "Recovery ran but didn't fix my movie"
+
+Both `tagarr_import.sh` and `tagarr_recover.sh` have safety checks that prevent incorrect fixes. Here's why recovery might skip a movie:
+
+| Reason | What happened | What to check |
+|--------|--------------|---------------|
+| No grab in history | Movie was manually imported or history was cleared | Movie > History tab — is there a grab (download icon) event? |
+| Grab has empty group | The indexer itself didn't include a release group | Movie > History > click the grab event — check the release title |
+| Filename contains a group | The file already has a group in the name but Radarr didn't parse it | Flagged for manual review instead of auto-fix (safety check) |
+| Title/year mismatch | The grab event doesn't match the current movie (edge case with replaced files) | Verify the grab event is for the correct movie version |
+| Group already set | Radarr already has a release group — recovery only fixes blanks | Check movie file details for the current group |
+
+### How to check in Radarr
+
+**History tab — Grab vs Import** — Compare these two events to understand the mismatch:
+
+![Grab vs Import — grab has -126811, imported file has no group](screenshots/troubleshoot-grab-vs-import.png)
+
+In this example, the grab title (row 1) ends with `-126811` — the indexer had the release group. But the actual imported file (row 2) is just `...Atmos.mkv` with no group at all. Radarr stores the filename, not the grab title, so the release group is lost. This is exactly what recovery fixes — it looks up the grab event and patches `126811` back onto the movie.
+
+### Common scenarios at a glance
+
+| Scenario | Grab title | Filename on disk | Recovery? |
+|----------|-----------|-----------------|-----------|
+| Normal release | `Movie.2024-GROUP` | `Movie.2024-GROUP.mkv` | Not needed — Radarr parses it |
+| Missing from filename | `Movie.2024-GROUP` | `Movie.2024.mkv` | Yes — recover patches from grab |
+| Dot separator | `Movie.2024.GROUP` | `Movie.2024.GROUP.mkv` | No — neither Radarr nor indexer used `-` |
+| No group anywhere | `Movie.2024.1080p` | `Movie.2024.1080p.mkv` | No — nothing to recover |
+| Manual import | *(no grab event)* | `Movie.2024-GROUP.mkv` | No grab history — but Radarr parses `-GROUP` from filename |
+
+---
+
 ## Testing
 
 `test_filters.sh` validates the quality and audio filter functions against
