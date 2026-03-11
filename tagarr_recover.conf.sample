@@ -5,6 +5,10 @@
 # default. See README.md for full documentation, safety chain details,
 # and usage examples.
 #
+# NOTE: Recovery requires grab history with a release group in Radarr.
+# Movies without grab history (manually imported, pre-Radarr files)
+# cannot be recovered — there is no source to recover from.
+#
 # Flags: --dry-run | --live | --instance TYPE | --movie ID | --no-rename | --help
 
 # Copy this file to tagarr_recover.conf and fill in your values.

@@ -8,6 +8,11 @@
 # indexer had the correct release group but the actual filename did not
 # include it (e.g., 126811 releases).
 #
+# NOTE: Recovery requires that Radarr has grab history with a release
+# group for the movie. Movies without any grab history (e.g., manually
+# imported files, or files imported before Radarr tracked them) cannot
+# be recovered — there is no source to recover from.
+#
 # Features:
 #   RECOVER    — Restore missing releaseGroup from grab history
 #   VERIFY     — 5-point safety chain:
