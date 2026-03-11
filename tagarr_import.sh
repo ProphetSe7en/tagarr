@@ -33,7 +33,7 @@
 # Test with a single movie before enabling as a Radarr Connect handler.
 # -----------------------------------------------------------------------------
 
-SCRIPT_VERSION="1.3.2"
+SCRIPT_VERSION="1.3.3"
 
 ########################################
 # CONFIG LOADING
@@ -75,7 +75,8 @@ EVENT_TYPE="${radarr_eventtype:-Test}"
 MOVIE_ID="${radarr_movie_id:-0}"
 MOVIE_FILE_RELATIVE="${radarr_moviefile_relativepath:-}"
 MOVIE_FILE_SCENE="${radarr_moviefile_scenename:-}"
-RELEASE_GROUP_FROM_EVENT="${radarr_release_releasegroup:-}"
+RELEASE_GROUP_FROM_FILE="${radarr_moviefile_releasegroup:-}"
+DOWNLOAD_ID_FROM_EVENT="${radarr_download_id:-}"
 
 ################################################################################
 # LOGGING AND LOG ROTATION
@@ -347,7 +348,7 @@ check_audio_match() {
 }
 
 ################################################################################
-# RELEASE GROUP RECOVERY FROM GRAB HISTORY
+# RELEASE GROUP RECOVERY VIA DOWNLOAD ID
 ################################################################################
 
 # Result variable — set by fix_release_group_from_history() on success.
@@ -355,89 +356,13 @@ check_audio_match() {
 # occur if we returned the value via echo inside a $() capture.
 _RECOVER_RESULT=""
 
-# Extract release group from filename (text after last hyphen before extension)
-# Filters out codecs, resolutions, and multi-part audio fragments.
-_extract_group_from_filename() {
-    local filepath="$1"
-    local filename
-    filename=$(basename "$filepath")
-    local base="${filename%.*}"
-    [[ "$base" != *-* ]] && return 1
-    local candidate="${base##*-}"
-    [ -z "$candidate" ] && return 1
-    [[ "$candidate" == *.* ]] && return 1
-    [[ "$candidate" == *" "* ]] && return 1
-    local lower="${candidate,,}"
-    case "$lower" in
-        h264|h265|x264|x265|hevc|avc|vc1|remux) return 1 ;;
-        dl|hd) return 1 ;;
-    esac
-    [[ "$lower" =~ ^[0-9]+(p|i)$ ]] && return 1
-    echo "$candidate"
-    return 0
-}
-
-# Find import-verified grab from history (walks newest-to-oldest, skips failed grabs)
-# Return codes: 0 = found group (echoed), 1 = no verified grab, 2 = verified but empty group
-_find_imported_grab_group() {
-    local history_json="$1"
-    local movie_title="$2"
-    local movie_year="$3"
-    local event_count
-    event_count=$(echo "$history_json" | jq '(. // []) | length' 2>/dev/null) || event_count=0
-    [ "$event_count" -eq 0 ] && return 1
-    # Note: empty releaseGroup uses sentinel __NONE__ to prevent bash read
-    # from collapsing consecutive tabs (IFS=tab treats adjacent tabs as one)
-    local events_tsv
-    events_tsv=$(echo "$history_json" | jq -r '
-        (. // []) | sort_by(.date) | reverse | .[] |
-        [.eventType, ((.data.releaseGroup // "" | if . == "" then "__NONE__" else . end)), (.sourceTitle // "")] | @tsv
-    ') || return 1
-    local state="unknown"
-    while IFS=$'\t' read -r event_type grab_rg source_title; do
-        case "$event_type" in
-            downloadFolderImported|movieFileImported) state="imported" ;;
-            downloadFailed) state="failed" ;;
-            grabbed)
-                if [ "$state" = "failed" ]; then state="unknown"; continue; fi
-                if [ "$state" != "imported" ]; then state="unknown"; continue; fi
-                # First verified grab = the one that produced the current file.
-                # If empty, stop here — do NOT fall back to older grabs (different files).
-                if [ "$grab_rg" = "__NONE__" ]; then
-                    return 2
-                fi
-                local source_lower="${source_title,,}" title_lower="${movie_title,,}"
-                local title_word
-                title_word=$(echo "$title_lower" | sed -E 's/^(the|a|an) //' | awk '{print $1}')
-                local year_valid=false title_valid=false
-                [ -n "$movie_year" ] && [ "$movie_year" != "0" ] && [ "$movie_year" != "null" ] && year_valid=true
-                [ -n "$title_word" ] && [ "${#title_word}" -ge 3 ] && title_valid=true
-                local year_match=false title_match=false
-                if [ "$year_valid" = "true" ] && \
-                   echo "$source_title" | grep -wq "$movie_year"; then year_match=true; fi
-                if [ "$title_valid" = "true" ] && \
-                   echo "$source_lower" | grep -Fqi "$title_word"; then title_match=true; fi
-                local verified=false
-                if [ "$year_valid" = "true" ] && [ "$title_valid" = "true" ]; then
-                    [ "$year_match" = "true" ] && [ "$title_match" = "true" ] && verified=true
-                else
-                    [ "$year_match" = "true" ] || [ "$title_match" = "true" ] && verified=true
-                fi
-                if [ "$verified" = "true" ]; then echo "$grab_rg"; return 0; fi
-                state="unknown"
-                ;;
-        esac
-    done <<< "$events_tsv"
-    return 1
-}
-
 fix_release_group_from_history() {
     local movie_id="$1"
     local movie_title="$2"
     local movie_year="$3"
     local current_rg="$4"
     local moviefile_id="$5"
-    local rel_path="${6:-}"
+    local download_id="$6"
 
     _RECOVER_RESULT=""
 
@@ -446,21 +371,15 @@ fix_release_group_from_history() {
         return 1
     fi
 
-    log "INFO" "Release group missing/unknown — checking safety chain..."
+    log "INFO" "Release group missing/unknown — attempting recovery via downloadId..."
 
-    # SAFETY: Check if the filename already has a release group
-    # If Radarr has none but the filename does, something is wrong — don't touch it
-    if [ -n "$rel_path" ]; then
-        local filename_group=""
-        filename_group=$(_extract_group_from_filename "$rel_path") || true
-        if [ -n "$filename_group" ]; then
-            log "WARN" "Filename has release group '${filename_group}' but Radarr has none — skipping fix"
-            log "INFO" "File: $rel_path"
-            return 1
-        fi
+    # Must have a downloadId to match against
+    if [ -z "$download_id" ]; then
+        log "INFO" "No downloadId available — cannot recover"
+        return 1
     fi
 
-    # Query ALL history (not just grabs) for import verification
+    # Query history for this movie
     local history_json
     history_json=$(curl -s -f "${PRIMARY_RADARR_API_URL}/history/movie?movieId=${movie_id}&apikey=${PRIMARY_RADARR_API_KEY}") || history_json=""
 
@@ -470,20 +389,19 @@ fix_release_group_from_history() {
         return 1
     fi
 
-    # Find import-verified grab (walks history newest-to-oldest, skips failed grabs)
-    local grab_rg="" find_rc=0
-    grab_rg=$(_find_imported_grab_group "$history_json" "$movie_title" "$movie_year") || find_rc=$?
+    # Find grab with matching downloadId — exact match, no walking/guessing
+    local grab_rg
+    grab_rg=$(echo "$history_json" | jq -r --arg dlid "$download_id" '
+        [.[] | select(.eventType == "grabbed" and .downloadId == $dlid)] |
+        .[0].data.releaseGroup // ""
+    ') || grab_rg=""
 
     if [ -z "$grab_rg" ]; then
-        if [ "$find_rc" -eq 2 ]; then
-            log "INFO" "Grab verified — No-RlsGroup"
-        else
-            log "INFO" "No verified grab found in history"
-        fi
+        log "INFO" "No grab found with downloadId $download_id"
         return 1
     fi
 
-    log "INFO" "Found verified releaseGroup '$grab_rg' from grab history"
+    log "INFO" "Found releaseGroup '$grab_rg' from grab with downloadId $download_id"
 
     if [ -z "$moviefile_id" ] || [ "$moviefile_id" = "null" ]; then
         log "WARN" "Cannot determine movieFile ID — skipping fix"
@@ -600,42 +518,23 @@ if [ "${ENABLE_DEBUG:-false}" = "true" ]; then
     log "DEBUG" "Scene: ${MOVIE_FILE_SCENE:-none}"
 fi
 
-# Get file info for matching — priority: event variable > API > history recovery
+# Get file info for matching — priority: file env var > API > downloadId recovery
 RELEASE_GROUP_FIELD=$(echo "$movie_json" | jq -r '.movieFile.releaseGroup // ""')
 
-# --- Release group from Radarr Connect event (most reliable during import/upgrade) ---
-if [ -n "$RELEASE_GROUP_FROM_EVENT" ] && [ "$RELEASE_GROUP_FROM_EVENT" != "null" ]; then
+# --- Release group from Radarr file env var (most reliable on import/upgrade) ---
+if [ -n "$RELEASE_GROUP_FROM_FILE" ] && [ "$RELEASE_GROUP_FROM_FILE" != "null" ]; then
     if [ -z "$RELEASE_GROUP_FIELD" ] || [ "$RELEASE_GROUP_FIELD" = "Unknown" ] || [ "$RELEASE_GROUP_FIELD" = "null" ]; then
-        log "INFO" "Using release group from event: '$RELEASE_GROUP_FROM_EVENT' (API had: '${RELEASE_GROUP_FIELD:-empty}')"
-        RELEASE_GROUP_FIELD="$RELEASE_GROUP_FROM_EVENT"
-        MOVIE_RELEASE_GROUP="$RELEASE_GROUP_FROM_EVENT"
-        RECOVER_GROUP="$RELEASE_GROUP_FROM_EVENT"
-        # Also patch the moviefile in Radarr so rename uses the correct group
-        _moviefile_id=$(echo "$movie_json" | jq -r '.movieFile.id // ""')
-        if [ -n "$_moviefile_id" ] && [ "$_moviefile_id" != "null" ]; then
-            _moviefile_json=$(curl -s -f "${PRIMARY_RADARR_API_URL}/moviefile/${_moviefile_id}?apikey=${PRIMARY_RADARR_API_KEY}") || _moviefile_json=""
-            if [ -n "$_moviefile_json" ] && [ "$_moviefile_json" != "null" ]; then
-                _updated=$(echo "$_moviefile_json" | jq --arg rg "$RELEASE_GROUP_FROM_EVENT" '.releaseGroup = $rg')
-                _put_resp=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X PUT \
-                    "${PRIMARY_RADARR_API_URL}/moviefile/${_moviefile_id}?apikey=${PRIMARY_RADARR_API_KEY}" \
-                    -H "Content-Type: application/json" -d "$_updated")
-                _put_code=$(echo "$_put_resp" | grep "HTTP_CODE:" | tail -1 | cut -d: -f2)
-                if [ "$_put_code" = "200" ] || [ "$_put_code" = "202" ]; then
-                    log "INFO" "Patched moviefile releaseGroup to '$RELEASE_GROUP_FROM_EVENT'"
-                else
-                    log "WARN" "Failed to patch moviefile releaseGroup (HTTP $_put_code)"
-                fi
-            fi
-        fi
+        log "INFO" "Using release group from file env var: '$RELEASE_GROUP_FROM_FILE' (API had: '${RELEASE_GROUP_FIELD:-empty}')"
+        RELEASE_GROUP_FIELD="$RELEASE_GROUP_FROM_FILE"
+        MOVIE_RELEASE_GROUP="$RELEASE_GROUP_FROM_FILE"
     fi
 fi
 
-# --- Release group recovery from grab history (fallback for empty/Unknown) ---
+# --- Release group recovery via downloadId (fallback for empty/Unknown) ---
 if [ "${ENABLE_RECOVER:-true}" = "true" ] && \
    { [ -z "$RELEASE_GROUP_FIELD" ] || [ "$RELEASE_GROUP_FIELD" = "Unknown" ] || [ "$RELEASE_GROUP_FIELD" = "null" ]; }; then
     _moviefile_id=$(echo "$movie_json" | jq -r '.movieFile.id // ""')
-    _rel_path=$(echo "$movie_json" | jq -r '.movieFile.relativePath // ""')
-    if fix_release_group_from_history "$MOVIE_ID" "$MOVIE_TITLE" "$MOVIE_YEAR" "$RELEASE_GROUP_FIELD" "$_moviefile_id" "$_rel_path"; then
+    if fix_release_group_from_history "$MOVIE_ID" "$MOVIE_TITLE" "$MOVIE_YEAR" "$RELEASE_GROUP_FIELD" "$_moviefile_id" "$DOWNLOAD_ID_FROM_EVENT"; then
         RELEASE_GROUP_FIELD="$_RECOVER_RESULT"
         MOVIE_RELEASE_GROUP="$_RECOVER_RESULT"
         RECOVER_GROUP="$_RECOVER_RESULT"

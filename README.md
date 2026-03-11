@@ -201,7 +201,7 @@ Runs automatically via Radarr Connect on every download, upgrade, or file delete
 **Setup:** Radarr > Settings > Connect > Custom Script > path to `tagarr_import.sh` > Events: On Download, On Upgrade, On File Delete
 
 Extra features beyond `tagarr.sh`:
-- **Release group recovery** — fixes missing groups from grab history before tagging
+- **Release group recovery** — fixes missing groups by matching the download ID against grab history (exact match, no guessing)
 - **Auto-tag discovery** — optionally adds new groups as active (no manual review needed)
 - **File delete cleanup** — removes all managed tags when a movie file is deleted
 
@@ -211,7 +211,7 @@ Uses its own config file (`tagarr_import.conf`), separate from `tagarr.conf`.
 
 Fixes movies where Radarr lost the release group during import. This happens when the group name is in the indexer title but not in the actual filename inside the torrent.
 
-The script checks grab history, verifies the correct group through a 5-point safety chain (blank-only, filename cross-check, import-verified grab, non-empty, title+year match), and patches it back.
+The standalone scanner checks grab history using a 5-point safety chain (blank-only, filename cross-check, import-verified grab, non-empty, title+year match). The import script (`tagarr_import.sh`) uses a simpler and more reliable method: matching the download ID from Radarr against the grab event for an exact lookup.
 
 ```bash
 ./tagarr_recover.sh                    # Preview all (dry-run)
@@ -243,7 +243,11 @@ Bulk remove or rename tags across one or both instances. Both default to dry-run
 When enabled in `tagarr.sh` or `tagarr_import.sh`, movies whose release
 group is not in `RELEASE_GROUPS` (active or commented) are checked against
 your quality + audio filters. Groups where both filters pass are written
-to your config as commented entries:
+to your config as commented entries.
+
+**Requirement:** Discovery only works when a release group is known in Radarr.
+If the imported file has no release group (not in filename, not recoverable
+from grab history via download ID), the movie is silently skipped.
 
 ```bash
     #"newgroup:newgroup:NewGroup:filtered"    # Discovered 2026-02-17: MA WEB-DL + TrueHD Atmos

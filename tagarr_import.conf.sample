@@ -73,15 +73,25 @@ ENABLE_DTS_HD_MA=true      # DTS-HD Master Audio
 
 # === RELEASE GROUP RECOVERY ===
 # When enabled, movies imported with an empty/unknown release group are
-# checked against grab history. If a valid releaseGroup is found, it is
-# patched into the moviefile and a rename is triggered. This runs before
-# the tagging logic so the corrected group is available for tag matching.
+# recovered using the download ID from Radarr's grab history. The correct
+# group is patched into the moviefile and a rename is triggered. This runs
+# before tagging so the corrected group is available for tag matching.
+#
+# How it works: Radarr provides a download ID on import that matches the
+# original grab event. The script looks up the grab by this ID to find
+# the release group — no guessing, no walking through old history.
 ENABLE_RECOVER=true
 
 # === DISCOVERY ===
 # When enabled, movies that pass all quality+audio filters but whose release
 # group is not in RELEASE_GROUPS are flagged as "discovered". New groups are
 # written to this config as commented entries for manual review.
+#
+# NOTE: Discovery requires a release group to be known in Radarr. If the
+# imported file has no release group (not in filename, not recoverable from
+# grab history), the movie is silently skipped — there is nothing to discover.
+# This typically happens with manually imported files or torrents where the
+# group name only appears in the folder/indexer title but not in the file.
 ENABLE_DISCOVERY=true
 
 # === AUTO-TAG DISCOVERED GROUPS ===
