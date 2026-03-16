@@ -103,14 +103,14 @@ Now every new import is tagged instantly. Run `tagarr.sh` on a schedule (cron, C
 
 ## Scripts
 
-| Script | What It Does | When to Use |
-|--------|-------------|-------------|
-| `tagarr.sh` | Scans all movies, tags by release group | Schedule daily/weekly or run manually |
-| `tagarr_import.sh` | Tags one movie on import/upgrade/delete | Radarr Connect (automatic) |
-| `tagarr_recover.sh` | Fixes missing release groups from grab history | When Radarr lost the release group on import |
-| `tagarr_list.sh` | Tags movies from TMDb/Trakt lists | Curated collections (awards, directors, etc.) |
-| `tagarr_remove.sh` | Removes tags from all movies | Cleanup old/unwanted tags |
-| `tagarr_rename.sh` | Renames tags (old→new, migrates movies) | Rename a tag without losing assignments |
+| Script | What It Does | How to Run |
+|--------|-------------|------------|
+| `tagarr.sh` | Scans all movies, tags by release group | **Manual or schedule** (cron/Cronicle) |
+| `tagarr_import.sh` | Tags one movie on import/upgrade/delete | **Radarr Connect** (the ONLY script for Connect) |
+| `tagarr_recover.sh` | Fixes missing release groups from grab history | **Manual or schedule** (NOT Radarr Connect) |
+| `tagarr_list.sh` | Tags movies from TMDb/Trakt lists | **Manual or schedule** |
+| `tagarr_remove.sh` | Removes tags from all movies | **Manual** |
+| `tagarr_rename.sh` | Renames tags (old→new, migrates movies) | **Manual** |
 
 All scripts default to **dry-run mode** — no changes are made until you pass `--live`.
 
@@ -194,7 +194,11 @@ Scans your entire library and tags movies by release group. Run on a schedule as
 ./tagarr.sh --tag flux,sic     # Only process specific groups
 ```
 
-### tagarr_import.sh — Event-Driven Tagger
+### tagarr_import.sh — Event-Driven Tagger (Radarr Connect)
+
+> **This is the ONLY Tagarr script designed for Radarr Connect.**
+> All other scripts (`tagarr.sh`, `tagarr_recover.sh`, etc.) are standalone and
+> must be run manually or on a schedule — they will not work as Connect handlers.
 
 Runs automatically via Radarr Connect on every download, upgrade, or file delete. Tags the movie instantly using the same filters as `tagarr.sh`.
 
@@ -209,6 +213,12 @@ Uses its own config file (`tagarr_import.conf`), separate from `tagarr.conf`.
 
 ### tagarr_recover.sh — Release Group Recovery
 
+> **This is a standalone script. Do NOT use it as a Radarr Connect handler.**
+> If you want automatic tagging on every download/upgrade, use `tagarr_import.sh` instead.
+> Recover is designed to be run manually or on a schedule (cron/Cronicle) to scan
+> your library in bulk. It does not read Radarr event variables and will not work
+> correctly as a Connect script.
+
 Fixes movies where Radarr lost the release group during import. This happens when the group name is in the indexer title but not in the actual filename inside the torrent.
 
 The standalone scanner checks grab history using a 5-point safety chain (blank-only, filename cross-check, import-verified grab, non-empty, title+year match). The import script (`tagarr_import.sh`) uses a simpler and more reliable method: matching the download ID from Radarr against the grab event for an exact lookup.
@@ -218,6 +228,7 @@ The standalone scanner checks grab history using a 5-point safety chain (blank-o
 ./tagarr_recover.sh --movie 123        # Preview one movie
 ./tagarr_recover.sh --movie 123 --live # Fix one movie
 ./tagarr_recover.sh --live             # Fix all
+./tagarr_recover.sh --movie 123 --debug # Dump full Radarr data for debugging
 ```
 
 ### tagarr_list.sh — List-Based Tagger
@@ -332,6 +343,24 @@ In this example, the grab title (row 1) ends with `-126811` — the indexer had 
 | Dot separator | `Movie.2024.GROUP` | `Movie.2024.GROUP.mkv` | No — neither Radarr nor indexer used `-` |
 | No group anywhere | `Movie.2024.1080p` | `Movie.2024.1080p.mkv` | No — nothing to recover |
 | Manual import | *(no grab event)* | `Movie.2024-GROUP.mkv` | No grab history — but Radarr parses `-GROUP` from filename |
+
+### Reporting issues
+
+If recovery tags the wrong release group or skips a movie it shouldn't, **always run with `--debug` first** and include the full output when reporting. Debug mode dumps all the data the script uses to make its decision:
+
+```bash
+# Get debug output for a specific movie (dry-run, no changes made)
+./tagarr_recover.sh --movie <RADARR_MOVIE_ID> --debug --dry-run
+```
+
+The debug log includes:
+- Current moviefile metadata (releaseGroup, sceneName, quality, audio codec)
+- Complete Radarr history for the movie (all grabs, imports, deletes, renames)
+- The exact grab event that `find_imported_grab_group` matched (or why it didn't match)
+
+> **Note:** The `--movie` flag uses Radarr's **internal movie ID** (visible in the URL when viewing a movie: `/movie/6913`), not the TMDb ID.
+
+Without debug output, it is very difficult to diagnose what went wrong. Please do not open issues without it.
 
 ---
 

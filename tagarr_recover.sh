@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 # -----------------------------------------------------------------------------
 # Tagarr Recover — Release Group Recovery from Grab History
-# Version: 1.0.1
+# Version: 1.1.0
 #
 # Scans movies in Radarr where the release group is missing or unknown,
 # and recovers it from the grab history. This fixes movies where the
 # indexer had the correct release group but the actual filename did not
 # include it (e.g., 126811 releases).
+#
+# !! WARNING: STANDALONE SCRIPT ONLY !!
+# This script is NOT a Radarr Connect handler. Do NOT add it as a
+# Custom Script in Radarr > Settings > Connect. It does not read
+# Radarr event variables and will malfunction if triggered by events.
+# For automatic tagging on import/upgrade, use tagarr_import.sh instead.
 #
 # NOTE: Recovery requires that Radarr has grab history with a release
 # group for the movie. Movies without any grab history (e.g., manually
@@ -42,7 +48,7 @@
 # -----------------------------------------------------------------------------
 
 set -euo pipefail
-SCRIPT_VERSION="1.0.1"
+SCRIPT_VERSION="1.1.0"
 
 ########################################
 # CONFIG LOADING
@@ -67,6 +73,7 @@ DRY_RUN="${ENABLE_DRY_RUN:-true}"
 RENAME="${ENABLE_RENAME:-true}"
 INSTANCE="both"
 MOVIE_FILTER=""
+DEBUG=false
 
 show_help() {
     cat <<'HELP'
@@ -80,6 +87,7 @@ Options:
   --instance TYPE        Which instance to process: primary, secondary, both (default: both)
   --movie ID             Process a single movie by Radarr movie ID
   --no-rename            Skip file rename even in live mode
+  --debug                Dump full Radarr data for each movie (moviefile JSON, history events)
   --help                 Show this help message
 
 Examples:
@@ -105,6 +113,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-rename)
             RENAME=false
+            shift
+            ;;
+        --debug)
+            DEBUG=true
             shift
             ;;
         --instance)
@@ -250,7 +262,10 @@ extract_group_from_filename() {
 #   failure after grab → grab never imported → SKIP, try older grabs
 #   nothing after grab → unverified (in-progress? pruned?) → SKIP
 #
-# Also verifies title+year match between grab sourceTitle and movie metadata.
+# Verification priority:
+#   1. downloadId match (grab+import share same ID) — strongest, skip title check
+#   2. Title+year match (fallback when downloadId missing or mismatched)
+#
 # Returns releaseGroup via stdout (exit 0) or nothing (exit 1).
 # Return codes: 0 = found group (echoed), 1 = no verified grab, 2 = verified but empty group
 find_imported_grab_group() {
@@ -264,24 +279,33 @@ find_imported_grab_group() {
 
     # Pre-process all events into tab-separated lines (single jq call)
     # Sorted newest first for walk-back logic
-    # Note: empty releaseGroup uses sentinel __NONE__ to prevent bash read
+    # Fields: eventType, releaseGroup, sourceTitle, downloadId
+    # Note: empty fields use sentinel __NONE__ to prevent bash read
     # from collapsing consecutive tabs (IFS=tab treats adjacent tabs as one)
     local events_tsv
     events_tsv=$(echo "$history_json" | jq -r '
         (. // []) | sort_by(.date) | reverse | .[] |
-        [.eventType, ((.data.releaseGroup // "" | if . == "" then "__NONE__" else . end)), (.sourceTitle // "")] | @tsv
+        [
+            .eventType,
+            ((.data.releaseGroup // "" | if . == "" then "__NONE__" else . end)),
+            (.sourceTitle // ""),
+            ((.downloadId // "" | if . == "" then "__NONE__" else . end))
+        ] | @tsv
     ') || return 1
 
     # State tracks what happened AFTER the grab we're about to see
     local state="unknown"
+    local import_dlid="__NONE__"  # downloadId of the most recent import
 
-    while IFS=$'\t' read -r event_type grab_rg source_title; do
+    while IFS=$'\t' read -r event_type grab_rg source_title dl_id; do
         case "$event_type" in
             downloadFolderImported|movieFileImported)
                 state="imported"
+                import_dlid="$dl_id"
                 ;;
             downloadFailed)
                 state="failed"
+                import_dlid="__NONE__"
                 ;;
             grabbed)
                 # Skip grabs that were followed by a failure
@@ -303,7 +327,17 @@ find_imported_grab_group() {
                     return 2
                 fi
 
-                # Title+year verification — require BOTH when both are available
+                # VERIFICATION: downloadId match is strongest proof
+                # When grab and import share the same downloadId, this grab
+                # definitively produced the imported file — trust it regardless
+                # of title/year (indexers sometimes use wrong year)
+                if [ "$dl_id" != "__NONE__" ] && [ "$import_dlid" != "__NONE__" ] && \
+                   [ "$dl_id" = "$import_dlid" ]; then
+                    echo "$grab_rg"
+                    return 0
+                fi
+
+                # FALLBACK: Title+year verification when downloadId doesn't match
                 local source_lower="${source_title,,}"
                 local title_lower="${movie_title,,}"
                 local title_word
@@ -651,9 +685,52 @@ process_instance() {
             continue
         fi
 
+        # Debug: dump all data for this movie (matches tagarr_debug.sh detail level)
+        if [ "$DEBUG" = "true" ]; then
+            local event_count
+            event_count=$(echo "$history_json" | jq 'length' 2>/dev/null) || event_count=0
+            log "DEBUG" "  ======== MOVIE DEBUG ========"
+            log "DEBUG" "  Movie ID: $movie_id | Title: $movie_title | Year: $movie_year"
+            log "DEBUG" "  MovieFile ID: $moviefile_id"
+            log "DEBUG" "  Relative Path: $rel_path"
+            log "DEBUG" "  Filename Group Extract: '${filename_group:-none}'"
+            log "DEBUG" ""
+            # Moviefile API (direct)
+            local debug_mf
+            debug_mf=$(curl -s -f "${api_url}/moviefile/${moviefile_id}?apikey=${api_key}" 2>/dev/null) || debug_mf=""
+            if [ -n "$debug_mf" ] && [ "$debug_mf" != "null" ]; then
+                log "DEBUG" "  --- MovieFile API ---"
+                log "DEBUG" "  releaseGroup:  $(echo "$debug_mf" | jq -r '.releaseGroup // "null"')"
+                log "DEBUG" "  sceneName:     $(echo "$debug_mf" | jq -r '.sceneName // "null"')"
+                log "DEBUG" "  quality.name:  $(echo "$debug_mf" | jq -r '.quality.quality.name // "null"')"
+                log "DEBUG" "  quality.source: $(echo "$debug_mf" | jq -r '.quality.quality.source // "null"')"
+                log "DEBUG" "  audioCodec:    $(echo "$debug_mf" | jq -r '.mediaInfo.audioCodec // "null"')"
+                log "DEBUG" "  dateAdded:     $(echo "$debug_mf" | jq -r '.dateAdded // "null"')"
+            fi
+            log "DEBUG" ""
+            log "DEBUG" "  --- History ($event_count events, newest first) ---"
+            echo "$history_json" | jq -r '
+                (. // []) | sort_by(.date) | reverse | to_entries[] |
+                "  [\(.key)] \(.value.date)  \(.value.eventType)" +
+                "\n        sourceTitle:  \(.value.sourceTitle // "<none>")" +
+                "\n        releaseGroup: \(.value.data.releaseGroup // "<none>")" +
+                "\n        downloadId:   \(.value.downloadId // "<none>")" +
+                "\n        quality:      \(.value.quality.quality.name // "<none>")" +
+                ""
+            ' 2>/dev/null | while IFS= read -r line; do
+                log "DEBUG" "$line"
+            done
+            log "DEBUG" "  --- End History ---"
+        fi
+
         # SAFETY CHECK 3-5: Find import-verified grab with title+year match
         local fixed_rg="" find_rc=0
         fixed_rg=$(find_imported_grab_group "$history_json" "$movie_title" "$movie_year") || find_rc=$?
+
+        # Debug: show result
+        if [ "$DEBUG" = "true" ]; then
+            log "DEBUG" "  find_imported_grab_group result: rg='${fixed_rg}' rc=${find_rc}"
+        fi
 
         if [ -z "$fixed_rg" ]; then
             if [ "$find_rc" -eq 2 ]; then
@@ -793,6 +870,7 @@ else
 fi
 log "INFO" "Rename: $RENAME"
 log "INFO" "Instance: $INSTANCE"
+[ "$DEBUG" = "true" ] && log "INFO" "Debug: ${YELLOW}ENABLED${NC}"
 [ -n "$MOVIE_FILTER" ] && log "INFO" "Movie: $MOVIE_FILTER (single movie mode)"
 
 START_TIME=$(date +%s)

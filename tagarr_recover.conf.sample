@@ -1,6 +1,11 @@
 # ========== CONFIGURATION ==========
 # Config for tagarr_recover.sh — Release Group Fix from Grab History
 #
+# !! WARNING !!
+# This script is a STANDALONE batch scanner. Run it manually or on a schedule.
+# Do NOT use it as a Radarr Connect handler — it will not work correctly.
+# For automatic tagging on import/upgrade, use tagarr_import.sh instead.
+#
 # Recovers missing release groups from Radarr grab history. Dry-run by
 # default. See README.md for full documentation, safety chain details,
 # and usage examples.
@@ -9,7 +14,7 @@
 # Movies without grab history (manually imported, pre-Radarr files)
 # cannot be recovered — there is no source to recover from.
 #
-# Flags: --dry-run | --live | --instance TYPE | --movie ID | --no-rename | --help
+# Flags: --dry-run | --live | --instance TYPE | --movie ID | --no-rename | --debug | --help
 
 # Copy this file to tagarr_recover.conf and fill in your values.
 
