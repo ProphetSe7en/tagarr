@@ -1,5 +1,41 @@
 # Changelog
 
+## v2.0.0 — 2026-04-05
+
+Sonarr support. **Sonarr functionality is new and needs further testing.**
+
+### Added
+
+- **Sonarr support in `tagarr_recover.sh`** — New `--app` flag supports
+  `radarr`, `sonarr`, or `both` (default). Scans series → episodefiles for
+  missing release groups using the same 5-point safety chain as Radarr.
+  New `--series ID` flag for single-series mode.
+- **`tagarr_import_sonarr.sh`** — New Sonarr Connect handler (On Download)
+  that recovers missing release groups on import using exact download ID
+  matching. Same approach as `tagarr_import.sh` v1.3.3 for Radarr. Includes
+  Discord notification with series poster and episode label.
+- **`tagarr_import_sonarr.conf.sample`** — Configuration for the Sonarr
+  import script.
+
+### Fixed
+
+- **History walking matched wrong grab after upgrade** — When the newest
+  import had no matching grab (pruned history) or the grab had no release
+  group, the function fell through to older grabs that belonged to previous
+  files. Now stops after the newest import — never falls through to old grabs.
+  This fix applies to both Radarr and Sonarr in `tagarr_recover.sh`.
+
+### Changed
+
+- **`tagarr_recover.conf.sample`** — Now includes both Radarr and Sonarr
+  instance configuration (primary + secondary for each).
+- **Config backwards compatible** — Old configs with `ENABLE_SECONDARY`
+  (without `_RADARR` suffix) still work.
+- **Discord notifications** — Show app type (Radarr/Sonarr) and use correct
+  terminology (movies vs episodes).
+- **History parsing** — Handles both `releaseGroup` and `ReleaseGroup` key
+  casing, and paginated history responses.
+
 ## v1.3.3 — 2026-03-11
 
 Rewrite release group recovery to use exact download ID matching.

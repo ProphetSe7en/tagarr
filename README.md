@@ -1,6 +1,6 @@
 # Tagarr
 
-Automated movie tagging for [Radarr](https://radarr.video/) based on release groups.
+Automated movie tagging for [Radarr](https://radarr.video/) based on release groups, with release group recovery for both Radarr and [Sonarr](https://sonarr.tv/).
 
 ## What Does This Do?
 
@@ -44,7 +44,7 @@ cd tagarr
 chmod +x tagarr*.sh
 ```
 
-**Requirements:** Radarr v3+, bash 4+, jq, curl
+**Requirements:** Radarr v3+ and/or Sonarr v3+, bash 4+, jq, curl
 
 ### 2. Configure
 
@@ -103,14 +103,17 @@ Now every new import is tagged instantly. Run `tagarr.sh` on a schedule (cron, C
 
 ## Scripts
 
-| Script | What It Does | How to Run |
-|--------|-------------|------------|
-| `tagarr.sh` | Scans all movies, tags by release group | **Manual or schedule** (cron/Cronicle) |
-| `tagarr_import.sh` | Tags one movie on import/upgrade/delete | **Radarr Connect** (the ONLY script for Connect) |
-| `tagarr_recover.sh` | Fixes missing release groups from grab history | **Manual or schedule** (NOT Radarr Connect) |
-| `tagarr_list.sh` | Tags movies from TMDb/Trakt lists | **Manual or schedule** |
-| `tagarr_remove.sh` | Removes tags from all movies | **Manual** |
-| `tagarr_rename.sh` | Renames tags (old→new, migrates movies) | **Manual** |
+| Script | App | What It Does | How to Run |
+|--------|-----|-------------|------------|
+| `tagarr.sh` | Radarr | Scans all movies, tags by release group | **Manual or schedule** (cron/Cronicle) |
+| `tagarr_import.sh` | Radarr | Tags one movie on import/upgrade/delete | **Radarr Connect** |
+| `tagarr_import_sonarr.sh` | Sonarr | Recovers missing release groups on import | **Sonarr Connect** |
+| `tagarr_recover.sh` | Both | Fixes missing release groups from grab history | **Manual or schedule** (NOT Connect) |
+| `tagarr_list.sh` | Radarr | Tags movies from TMDb/Trakt lists | **Manual or schedule** |
+| `tagarr_remove.sh` | Radarr | Removes tags from all movies | **Manual** |
+| `tagarr_rename.sh` | Radarr | Renames tags (old→new, migrates movies) | **Manual** |
+
+> **Sonarr support is new (v2.0.0) and needs further testing.** The recovery logic has been validated against live instances but has not been widely tested across different setups. Please report any issues.
 
 All scripts default to **dry-run mode** — no changes are made until you pass `--live`.
 
@@ -211,24 +214,33 @@ Extra features beyond `tagarr.sh`:
 
 Uses its own config file (`tagarr_import.conf`), separate from `tagarr.conf`.
 
-### tagarr_recover.sh — Release Group Recovery
+### tagarr_import_sonarr.sh — Sonarr Release Group Recovery (Sonarr Connect)
 
-> **This is a standalone script. Do NOT use it as a Radarr Connect handler.**
-> If you want automatic tagging on every download/upgrade, use `tagarr_import.sh` instead.
-> Recover is designed to be run manually or on a schedule (cron/Cronicle) to scan
-> your library in bulk. It does not read Radarr event variables and will not work
-> correctly as a Connect script.
+> **Sonarr support is new and needs further testing.** Please report any issues.
 
-Fixes movies where Radarr lost the release group during import. This happens when the group name is in the indexer title but not in the actual filename inside the torrent.
+Sonarr Connect handler that recovers missing release groups on import. This fixes the scoring loop where some trackers use different names for the torrent vs the file — Sonarr grabs based on the torrent name (with release group), but the file doesn't include it, causing Custom Format scores to drop and Sonarr to grab again.
 
-The standalone scanner checks grab history using a 5-point safety chain (blank-only, filename cross-check, import-verified grab, non-empty, title+year match). The import script (`tagarr_import.sh`) uses a simpler and more reliable method: matching the download ID from Radarr against the grab event for an exact lookup.
+Uses the same exact download ID matching as `tagarr_import.sh` for Radarr. Recovery only — no tagging or discovery.
+
+**Setup:** Sonarr > Settings > Connect > Custom Script > path to `tagarr_import_sonarr.sh` > Events: **On Download**
+
+### tagarr_recover.sh — Release Group Recovery (Radarr + Sonarr)
+
+> **This is a standalone script. Do NOT use it as a Connect handler.**
+> For automatic recovery on import, use `tagarr_import.sh` (Radarr) or
+> `tagarr_import_sonarr.sh` (Sonarr) instead.
+
+Batch scanner that fixes missing release groups from grab history. Supports both Radarr (movies) and Sonarr (series/episodes) — scans both by default.
+
+The standalone scanner checks grab history using a 5-point safety chain (blank-only, filename cross-check, import-verified grab, non-empty, title+year match). The import scripts use a simpler and more reliable method: matching the download ID against the grab event for an exact lookup.
 
 ```bash
-./tagarr_recover.sh                    # Preview all (dry-run)
-./tagarr_recover.sh --movie 123        # Preview one movie
-./tagarr_recover.sh --movie 123 --live # Fix one movie
-./tagarr_recover.sh --live             # Fix all
-./tagarr_recover.sh --movie 123 --debug # Dump full Radarr data for debugging
+./tagarr_recover.sh                        # Preview all, both apps (dry-run)
+./tagarr_recover.sh --app radarr           # Radarr only
+./tagarr_recover.sh --app sonarr --live    # Fix Sonarr episodes
+./tagarr_recover.sh --movie 123            # Preview one movie (Radarr)
+./tagarr_recover.sh --app sonarr --series 5 # Preview one series (Sonarr)
+./tagarr_recover.sh --movie 123 --debug    # Dump full data for debugging
 ```
 
 ### tagarr_list.sh — List-Based Tagger
@@ -382,14 +394,16 @@ Without debug output, it is very difficult to diagnose what went wrong. Please d
 
 | File | Description |
 |------|-------------|
-| `tagarr.sh` | Batch tagger (scheduled) |
-| `tagarr_import.sh` | Event-driven tagger (Radarr Connect) |
-| `tagarr_recover.sh` | Release group recovery from grab history |
-| `tagarr_list.sh` | List-based tagger (TMDb/Trakt) |
-| `tagarr_remove.sh` | Bulk tag removal |
-| `tagarr_rename.sh` | Bulk tag rename |
+| `tagarr.sh` | Batch tagger — Radarr (scheduled) |
+| `tagarr_import.sh` | Event-driven tagger — Radarr Connect |
+| `tagarr_import_sonarr.sh` | Release group recovery — Sonarr Connect |
+| `tagarr_recover.sh` | Release group recovery — Radarr + Sonarr (scheduled) |
+| `tagarr_list.sh` | List-based tagger — Radarr (TMDb/Trakt) |
+| `tagarr_remove.sh` | Bulk tag removal — Radarr |
+| `tagarr_rename.sh` | Bulk tag rename — Radarr |
 | `tagarr.conf.sample` | Sample config for tagarr.sh |
 | `tagarr_import.conf.sample` | Sample config for tagarr_import.sh |
+| `tagarr_import_sonarr.conf.sample` | Sample config for tagarr_import_sonarr.sh |
 | `tagarr_recover.conf.sample` | Sample config for tagarr_recover.sh |
 | `tagarr_list.conf.sample` | Sample config for tagarr_list.sh |
 | `tagarr_remove.conf.sample` | Sample config for tagarr_remove.sh |
@@ -399,6 +413,13 @@ Without debug output, it is very difficult to diagnose what went wrong. Please d
 | `LICENSE` | MIT License |
 
 ---
+
+## Support
+
+For questions, help, or bug reports:
+
+- **Discord:** [`#prophetse7en-apps`](https://discordapp.com/channels/492590071455940612/1486391669384417300) on the [TRaSH Guides Discord](https://trash-guides.info/discord) (under Community Apps)
+- **GitHub:** [prophetse7en/tagarr/issues](https://github.com/prophetse7en/tagarr/issues)
 
 ## License
 

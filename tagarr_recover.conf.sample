@@ -1,22 +1,29 @@
 # ========== CONFIGURATION ==========
-# Config for tagarr_recover.sh — Release Group Fix from Grab History
+# Config for tagarr_recover.sh — Release Group Recovery from Grab History
 #
 # !! WARNING !!
 # This script is a STANDALONE batch scanner. Run it manually or on a schedule.
-# Do NOT use it as a Radarr Connect handler — it will not work correctly.
-# For automatic tagging on import/upgrade, use tagarr_import.sh instead.
+# Do NOT use it as a Connect handler — it will not work correctly.
+# For automatic recovery on import, use:
+#   - tagarr_import.sh (Radarr — includes tagging + discovery)
+#   - tagarr_import_sonarr.sh (Sonarr — recovery only)
 #
-# Recovers missing release groups from Radarr grab history. Dry-run by
-# default. See README.md for full documentation, safety chain details,
+# Recovers missing release groups from Radarr/Sonarr grab history. Dry-run
+# by default. See README.md for full documentation, safety chain details,
 # and usage examples.
 #
-# NOTE: Recovery requires grab history with a release group in Radarr.
-# Movies without grab history (manually imported, pre-Radarr files)
-# cannot be recovered — there is no source to recover from.
+# NOTE: Recovery requires grab history with a release group. Media without
+# grab history (manually imported, pre-tracked files) cannot be recovered.
 #
-# Flags: --dry-run | --live | --instance TYPE | --movie ID | --no-rename | --debug | --help
+# Flags: --app TYPE | --dry-run | --live | --instance TYPE | --movie ID |
+#        --series ID | --no-rename | --debug | --help
 
 # Copy this file to tagarr_recover.conf and fill in your values.
+
+# === DEFAULT APP ===
+# Which app to use when --app is not specified. Can be overridden on command line.
+# Options: radarr, sonarr, both
+DEFAULT_APP="both"
 
 # === PRIMARY RADARR ===
 PRIMARY_RADARR_URL="http://localhost:7878"
@@ -24,14 +31,25 @@ PRIMARY_RADARR_API_KEY="your-api-key-here"
 PRIMARY_RADARR_NAME="Radarr"
 
 # === SECONDARY RADARR ===
-ENABLE_SECONDARY=false
+ENABLE_SECONDARY_RADARR=false
 SECONDARY_RADARR_URL="http://localhost:7979"
 SECONDARY_RADARR_API_KEY="your-api-key-here"
 SECONDARY_RADARR_NAME="Radarr 4K"
 
+# === PRIMARY SONARR ===
+PRIMARY_SONARR_URL="http://localhost:8989"
+PRIMARY_SONARR_API_KEY="your-api-key-here"
+PRIMARY_SONARR_NAME="Sonarr"
+
+# === SECONDARY SONARR ===
+ENABLE_SECONDARY_SONARR=false
+SECONDARY_SONARR_URL="http://localhost:8990"
+SECONDARY_SONARR_API_KEY="your-api-key-here"
+SECONDARY_SONARR_NAME="Sonarr 4K"
+
 # === RENAME ===
-# Triggers Radarr's RenameFiles command after fixing each movie.
-# Requires {Release Group} in your Radarr movie naming format.
+# Triggers RenameFiles command after fixing each item.
+# Requires {Release Group} in your naming format.
 ENABLE_RENAME=true
 
 # === DRY-RUN ===
