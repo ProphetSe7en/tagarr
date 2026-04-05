@@ -1,6 +1,7 @@
 # Production configs (contain API keys and URLs)
 tagarr.conf
 tagarr_import.conf
+tagarr_import_sonarr.conf
 tagarr_recover.conf
 tagarr_list.conf
 tagarr_remove.conf
