@@ -66,6 +66,12 @@ ENABLE_DTS_HD_MA=true      # DTS-HD Master Audio
 ENABLE_DISCOVERY=true
 DISCOVERY_LOG_FILE="${SCRIPT_DIR}/discovery.log"
 
+# === AUTO-TAG DISCOVERED GROUPS ===
+# When true, discovered groups are added as active entries (without #) in
+# RELEASE_GROUPS. They will be tagged on the next scheduled run automatically.
+# When false (default), groups are added as commented entries for manual review.
+AUTO_TAG_DISCOVERED=false
+
 # === DEBUG ===
 # When enabled, prints a detailed per-movie breakdown at the end of the run
 # showing file paths, quality/audio details, and match reasons for every

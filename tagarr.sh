@@ -578,7 +578,9 @@ main() {
   fi
 
   if [ "${ENABLE_DISCOVERY:-false}" = "true" ]; then
-    log "Discovery: ${GREEN}enabled${RESET} (${#known_release_groups[@]} known groups)"
+    local auto_tag_label=""
+    [ "${AUTO_TAG_DISCOVERED:-false}" = "true" ] && auto_tag_label=" + auto-tag"
+    log "Discovery: ${GREEN}enabled${RESET}${auto_tag_label} (${#known_release_groups[@]} known groups)"
     # Prepare discovery log buffer (written sorted at end of run)
     if [ -n "${DISCOVERY_LOG_FILE:-}" ]; then
       mkdir -p "$(dirname "$DISCOVERY_LOG_FILE")"
@@ -1334,7 +1336,9 @@ main() {
         local disc_rest="${disc_data#*|}"
         local disc_quality="${disc_rest%%|*}"
         local disc_audio="${disc_rest#*|}"
-        log "  #\"${rg_key}:${rg_key}:${disc_display}:filtered\"              # Discovered ${today}: ${disc_quality} + ${disc_audio}"
+        local prefix="#"
+        [ "${AUTO_TAG_DISCOVERED:-false}" = "true" ] && prefix=""
+        log "  ${prefix}\"${rg_key}:${rg_key}:${disc_display}:filtered\"              # Discovered ${today}: ${disc_quality} + ${disc_audio}"
       done
     else
       # Find insertion point: locate RELEASE_GROUPS=( line, then find closing )
@@ -1358,7 +1362,9 @@ main() {
             local disc_rest="${disc_data#*|}"
             local disc_quality="${disc_rest%%|*}"
             local disc_audio="${disc_rest#*|}"
-            insert_text+="    #\"${rg_key}:${rg_key}:${disc_display}:filtered\"              # Discovered ${today}: ${disc_quality} + ${disc_audio}"$'\n'
+            local prefix="#"
+            [ "${AUTO_TAG_DISCOVERED:-false}" = "true" ] && prefix=""
+            insert_text+="    ${prefix}\"${rg_key}:${rg_key}:${disc_display}:filtered\"              # Discovered ${today}: ${disc_quality} + ${disc_audio}"$'\n'
           done
 
           # Insert before the closing )
@@ -1534,7 +1540,11 @@ main() {
     if [ "$DRY_RUN" = true ]; then
       log "${YELLOW}[DRY-RUN] Discoveries NOT written to config${RESET}"
     else
-      log "${GREEN}✓ All discoveries written to config (commented out for review)${RESET}"
+      if [ "${AUTO_TAG_DISCOVERED:-false}" = "true" ]; then
+        log "${GREEN}✓ All discoveries written to config (active — auto-tag enabled)${RESET}"
+      else
+        log "${GREEN}✓ All discoveries written to config (commented out for review)${RESET}"
+      fi
     fi
     # Write discovery log (sorted by group, with summary)
     if [ -n "${DISCOVERY_LOG_FILE:-}" ] && [ ${#discovery_log_buffer[@]} -gt 0 ]; then

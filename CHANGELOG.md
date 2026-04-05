@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.1.0 — 2026-04-05
+
+### Added
+
+- **`AUTO_TAG_DISCOVERED` in `tagarr.sh`** — New config option (default: `false`)
+  that writes discovered release groups as active entries instead of commented
+  out. Groups are tagged automatically on the next scheduled run. Previously
+  this option was only available in `tagarr_import.sh`.
+
 ## v2.0.0 — 2026-04-05
 
 Sonarr support. **Sonarr functionality is new and needs further testing.**
