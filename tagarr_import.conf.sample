@@ -1,34 +1,36 @@
 # ========== CONFIGURATION ==========
 # Config for tagarr_import.sh — Event-Driven Radarr Tagger with Discovery
 #
-# This file controls all behavior of tagarr_import.sh. The script runs as a
-# Radarr Connect handler (On Download / On Upgrade / On File Delete). It tags
-# individual movies by release group when quality and audio filters match,
-# optionally syncs tags to a secondary instance, and discovers new groups.
+# Radarr Connect handler that tags movies on import, recovers missing
+# release groups, and discovers new groups. Runs automatically — do NOT
+# run this script manually.
 #
-# Separate from tagarr.conf — both configs are independent and can have
-# different release groups, webhooks, and filter settings.
+# For detailed explanations of every option, see docs/tagarr-import-guide.md
 #
-# Notification behavior:
-#   - Tagged movie  → Discord embed (orange) with tags and poster
-#   - Discovered    → Discord embed (gold) with new group info
-#   - No match      → Silent (no notification)
-#   - Test event    → Confirmation embed with version and status
+# Setup: Radarr > Settings > Connect > Custom Script
+#   Path: /scripts/tagarr_import.sh
+#   Events: On Download, On Upgrade, On Movie File Delete
 #
-# See README.md for setup instructions and full documentation.
+# This config is separate from tagarr.conf — both are independent and
+# can have different release groups, webhooks, and filter settings.
+# Most users keep them identical.
 
 # Copy this file to tagarr_import.conf and fill in your values.
 
 # === PRIMARY RADARR ===
 # The Radarr instance this script runs in (Connect > Custom Script).
-# Use container hostname when running inside Docker, IP when running from host.
+# URL: if running inside the Radarr container, use http://localhost:7878.
+#      If running on the host or another container, use the appropriate address.
+# API key: found in Radarr > Settings > General > API Key.
+# Name: display label for logs and Discord (can be anything).
 PRIMARY_RADARR_URL="http://localhost:7878"
 PRIMARY_RADARR_API_KEY="your-api-key-here"
 PRIMARY_RADARR_NAME="Radarr"
 
 # === SECONDARY RADARR ===
-# Optional second Radarr instance. When enabled, tags are mirrored from
-# primary to secondary for any movie that exists in both (matched by TMDb ID).
+# Optional second Radarr instance (e.g., 4K). When enabled, every tag
+# add/remove is mirrored to the secondary for movies that exist in both
+# (matched by TMDb ID). Set to false if you only have one instance.
 ENABLE_SYNC_TO_SECONDARY=false
 SECONDARY_RADARR_URL="http://localhost:7979"
 SECONDARY_RADARR_API_KEY="your-api-key-here"
@@ -39,13 +41,17 @@ SECONDARY_RADARR_NAME="Radarr 4K"
 #   "search_string:tag_name:display_name:mode"
 #
 # Fields:
-#   search_string — Lowercase string matched against releaseGroup field (word boundary)
-#   tag_name      — Tag label created in Radarr (lowercase, no spaces)
-#   display_name  — Human-readable name shown in logs and Discord
-#   mode          — "filtered" requires quality+audio match; "simple" tags any match
+#   search_string — Text to match against Radarr's releaseGroup field.
+#                   Case-insensitive, checked against: filename, scene name,
+#                   and releaseGroup field.
+#   tag_name      — Tag label created in Radarr (lowercase, no spaces).
+#   display_name  — Human-readable name for logs and Discord (any casing).
+#   mode          — "filtered" = must pass quality+audio filters below.
+#                   "simple"   = tags every release from this group.
 #
 # Commented entries (#) are ignored for tagging but counted as "known" by
-# discovery, so the same group won't be re-discovered.
+# discovery — the group won't be re-discovered.
+# See docs/tagarr-guide.md for full details on each field.
 RELEASE_GROUPS=(
     "thefarm:thefarm:TheFarm:filtered"         # Only MA/Play + lossless
     "flux:flux:FLUX:filtered"                  # Only MA/Play + lossless
@@ -56,68 +62,69 @@ RELEASE_GROUPS=(
 )
 
 # === QUALITY FILTERS ===
-# When ENABLE_QUALITY_FILTER=true, "filtered" mode groups only tag movies
-# whose filename contains one of the enabled quality sources.
+# Only applies to "filtered" mode groups. When enabled, the release must
+# come from one of the enabled WEB-DL sources. MA and Play are premium
+# sources that preserve original studio master audio.
+# Set ENABLE_QUALITY_FILTER=false to skip quality checks entirely.
+# See docs/tagarr-guide.md for why MA/Play are special.
 ENABLE_QUALITY_FILTER=true
-ENABLE_MA_WEBDL=true       # Movies Anywhere WEB-DL
-ENABLE_PLAY_WEBDL=true     # Google Play WEB-DL
+ENABLE_MA_WEBDL=true       # Movies Anywhere WEB-DL (studio master source)
+ENABLE_PLAY_WEBDL=true     # Google Play WEB-DL (comparable to MA)
 
 # === AUDIO FILTERS ===
-# When ENABLE_AUDIO_FILTER=true, "filtered" mode groups only tag movies
-# whose filename contains one of the enabled lossless audio codecs.
+# Only applies to "filtered" mode groups. When enabled, the release must
+# contain one of the enabled lossless codecs. Lossy codecs (EAC3, AAC, AC3)
+# and upmixed/transcoded audio are automatically rejected.
+# Set ENABLE_AUDIO_FILTER=false to skip audio checks entirely.
+# See docs/tagarr-guide.md for codec details.
 ENABLE_AUDIO_FILTER=true
-ENABLE_TRUEHD=true         # Dolby TrueHD (without Atmos)
-ENABLE_TRUEHD_ATMOS=true   # Dolby TrueHD Atmos
-ENABLE_DTS_X=true          # DTS:X
-ENABLE_DTS_HD_MA=true      # DTS-HD Master Audio
+ENABLE_TRUEHD=true         # Dolby TrueHD (lossless, typically 7.1)
+ENABLE_TRUEHD_ATMOS=true   # Dolby TrueHD Atmos (lossless + spatial audio)
+ENABLE_DTS_X=true          # DTS:X (lossless + spatial, DTS equivalent of Atmos)
+ENABLE_DTS_HD_MA=true      # DTS-HD Master Audio (lossless surround)
 
 # === RELEASE GROUP RECOVERY ===
-# When enabled, movies imported with an empty/unknown release group are
-# recovered using the download ID from Radarr's grab history. The correct
-# group is patched into the moviefile and a rename is triggered. This runs
-# before tagging so the corrected group is available for tag matching.
-#
-# How it works: Radarr provides a download ID on import that matches the
-# original grab event. The script looks up the grab by this ID to find
-# the release group — no guessing, no walking through old history.
+# When the imported movie has an empty/unknown release group, recover it
+# using the download ID from the Radarr Connect event. The download ID
+# matches the exact grab that produced this import — no guessing needed.
+# Recovery runs before tagging so the recovered group is available for
+# tag matching. A rename is triggered after recovery.
 ENABLE_RECOVER=true
 
 # === DISCOVERY ===
-# When enabled, movies that pass all quality+audio filters but whose release
-# group is not in RELEASE_GROUPS are flagged as "discovered". New groups are
-# written to this config as commented entries for manual review.
-#
-# NOTE: Discovery requires a release group to be known in Radarr. If the
-# imported file has no release group (not in filename, not recoverable from
-# grab history), the movie is silently skipped — there is nothing to discover.
-# This typically happens with manually imported files or torrents where the
-# group name only appears in the folder/indexer title but not in the file.
+# When the imported movie's release group is not in RELEASE_GROUPS (active
+# or commented) and passes both quality and audio filters, it's written to
+# this config as a commented entry. Discovery requires a release group to
+# exist — movies with no group (and failed/disabled recovery) are skipped.
+# Concurrent writes are protected by flock to prevent corruption.
 ENABLE_DISCOVERY=true
 
 # === AUTO-TAG DISCOVERED GROUPS ===
-# When true, discovered groups are added as active entries (without #) and
-# the triggering movie is tagged immediately. No need to manually uncomment
-# or run tagarr.sh for new groups.
+# When true, discovered groups are added as active entries (without #)
+# AND the triggering movie is tagged immediately in the same run.
+# Unlike tagarr.sh where two runs are needed, the import script can
+# tag immediately because it handles a single movie at a time.
 # When false, groups are added as commented entries for manual review.
 AUTO_TAG_DISCOVERED=false
 
 # === DISCORD NOTIFICATIONS ===
-# Send per-movie notifications when a movie is tagged or a new group is
-# discovered. Silent when nothing happens (no tag applied, no discovery).
+# Smart notifications: only sends when something happened (tag applied,
+# group discovered, or release group recovered). Silent imports produce
+# no notification. Includes movie poster thumbnail.
+# Create a webhook: Server Settings > Integrations > Webhooks > New Webhook.
 DISCORD_ENABLED=false
 DISCORD_WEBHOOK_URL=""
 
 # === DEBUG ===
-# When enabled, logs every filter decision for each event:
-#   - Release group, quality, size, scene name
-#   - Which groups matched and via which field (filename/scene/releaseGroup)
-#   - Quality and audio filter pass/fail per matched group
-#   - Skip reasons for non-matching groups
-#   - Discovery decisions (unknown/known, filter pass/fail)
-# Useful for verifying the script is working when no notifications are sent.
+# Logs every filter decision for each event: which groups matched, via
+# which field, quality/audio filter pass/fail, skip reasons, discovery
+# decisions. Enable when a movie isn't being tagged and you want to
+# understand why. Check the log file after the next import.
 ENABLE_DEBUG=false
 
 # === LOGGING ===
-# Main log file. Rotated automatically at 2 MiB (keeps one .old backup).
+# Log file for all output (timestamped). Since the script runs automatically
+# in the background, logging is the primary way to verify it's working.
+# Rotated at 2 MiB (keeps one .old backup).
 ENABLE_LOGGING=true
 LOG_FILE="${SCRIPT_DIR}/logs/tagarr_import.log"

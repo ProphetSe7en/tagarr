@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.1.1 — 2026-04-05
+
+### Fixed
+
+- **Shared tag_name double-counting** — When multiple release groups share the same `tag_name` (e.g., `flux:premium` + `sic:premium`), the summary, totals, and cleanup loops no longer process the same tag multiple times. Previously, shared tags would appear twice in the summary output and totals would be inflated in Discord notifications.
+
+### Improved
+
+- **Detailed how-to guides** — New standalone guides for each core script:
+  - [Batch Tagger Guide](docs/tagarr-guide.md) — `tagarr.sh` with use cases, config reference, overall workflow
+  - [Recovery Guide](docs/tagarr-recover-guide.md) — `tagarr_recover.sh` with safety chain details, Radarr/Sonarr differences
+  - [Import Guide](docs/tagarr-import-guide.md) — `tagarr_import.sh` + `tagarr_import_sonarr.sh` with setup, use cases, Docker instructions
+  - [Troubleshooting](docs/troubleshooting.md) — common issues across all scripts
+- **Config sample descriptions** — All `.conf.sample` files rewritten with detailed explanations of every option
+- **README restructured** — Short overview with links to guides, quick start follows recommended workflow
+- **Shared tag documentation** — Use cases for shared tags (`flux:premium` + `sic:premium`), dual-tag pattern, and remux cleanup via secondary sync
+
 ## v2.1.0 — 2026-04-05
 
 ### Added

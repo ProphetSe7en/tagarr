@@ -1,19 +1,21 @@
 # ========== CONFIGURATION ==========
 # Config for tagarr_recover.sh — Release Group Recovery from Grab History
 #
+# Recovers missing release groups by looking up the original grab event
+# in Radarr/Sonarr history. Supports both apps, dual instances, and
+# optional file renaming after recovery.
+#
+# For detailed explanations of every option, see docs/tagarr-recover-guide.md
+#
 # !! WARNING !!
-# This script is a STANDALONE batch scanner. Run it manually or on a schedule.
-# Do NOT use it as a Connect handler — it will not work correctly.
+# This is a STANDALONE batch scanner. Run it manually or on a schedule.
+# Do NOT use it as a Connect handler in Radarr/Sonarr — it will not work.
 # For automatic recovery on import, use:
 #   - tagarr_import.sh (Radarr — includes tagging + discovery)
 #   - tagarr_import_sonarr.sh (Sonarr — recovery only)
 #
-# Recovers missing release groups from Radarr/Sonarr grab history. Dry-run
-# by default. See README.md for full documentation, safety chain details,
-# and usage examples.
-#
-# NOTE: Recovery requires grab history with a release group. Media without
-# grab history (manually imported, pre-tracked files) cannot be recovered.
+# NOTE: Recovery requires grab history. Media without grab history
+# (manually imported files, cleared history) cannot be recovered.
 #
 # Flags: --app TYPE | --dry-run | --live | --instance TYPE | --movie ID |
 #        --series ID | --no-rename | --debug | --help
@@ -21,45 +23,68 @@
 # Copy this file to tagarr_recover.conf and fill in your values.
 
 # === DEFAULT APP ===
-# Which app to use when --app is not specified. Can be overridden on command line.
-# Options: radarr, sonarr, both
+# Which app to process when --app is not specified on the command line.
+# Options: radarr (movies only), sonarr (series only), both (Radarr
+# first, then Sonarr). If you only have Radarr, set to "radarr" to
+# skip the Sonarr connection attempt.
 DEFAULT_APP="both"
 
 # === PRIMARY RADARR ===
+# URL: full URL including port, no trailing slash.
+# API key: found in Radarr > Settings > General > API Key.
+# Name: display label for logs and Discord (can be anything).
 PRIMARY_RADARR_URL="http://localhost:7878"
 PRIMARY_RADARR_API_KEY="your-api-key-here"
 PRIMARY_RADARR_NAME="Radarr"
 
 # === SECONDARY RADARR ===
+# Optional second Radarr instance (e.g., 4K). Unlike tagarr.sh which
+# mirrors tags from primary to secondary, recover processes each instance
+# independently — each has its own history and file metadata.
+# Set ENABLE_SECONDARY_RADARR=false if you only have one Radarr instance.
 ENABLE_SECONDARY_RADARR=false
 SECONDARY_RADARR_URL="http://localhost:7979"
 SECONDARY_RADARR_API_KEY="your-api-key-here"
 SECONDARY_RADARR_NAME="Radarr 4K"
 
 # === PRIMARY SONARR ===
+# Same as Radarr above, but for Sonarr.
+# API key: found in Sonarr > Settings > General > API Key.
 PRIMARY_SONARR_URL="http://localhost:8989"
 PRIMARY_SONARR_API_KEY="your-api-key-here"
 PRIMARY_SONARR_NAME="Sonarr"
 
 # === SECONDARY SONARR ===
+# Optional second Sonarr instance (e.g., 4K). Processed independently.
+# Set ENABLE_SECONDARY_SONARR=false if you only have one Sonarr instance.
 ENABLE_SECONDARY_SONARR=false
 SECONDARY_SONARR_URL="http://localhost:8990"
 SECONDARY_SONARR_API_KEY="your-api-key-here"
 SECONDARY_SONARR_NAME="Sonarr 4K"
 
 # === RENAME ===
-# Triggers RenameFiles command after fixing each item.
-# Requires {Release Group} in your naming format.
+# After fixing a release group, trigger Radarr/Sonarr's RenameFiles
+# command so the file on disk gets renamed to include the recovered group.
+# This only has an effect if your naming format includes {Release Group}.
+# If you don't want file renames (e.g., to preserve cross-seed hardlinks),
+# set to false here or use --no-rename on the command line.
 ENABLE_RENAME=true
 
 # === DRY-RUN ===
-# Override with --live flag on command line.
+# Default run mode. When true, shows what would be fixed without making
+# any changes. Override with --live on the command line to execute fixes.
+# Recommended: leave as true and explicitly pass --live when ready.
 ENABLE_DRY_RUN=true
 
 # === DISCORD NOTIFICATIONS ===
+# Sends a summary embed (mode, counts, runtime) plus separate lists for
+# fixed items (green), flagged items (amber), and skipped items (grey).
+# Create a webhook: Server Settings > Integrations > Webhooks > New Webhook.
 DISCORD_ENABLED=false
 DISCORD_WEBHOOK_URL=""
 
 # === LOGGING ===
+# Log file for all terminal output (timestamped, ANSI colors stripped).
+# Rotated at 2 MiB (keeps one .old backup).
 ENABLE_LOGGING=true
 LOG_FILE="${SCRIPT_DIR}/logs/tagarr_recover.log"

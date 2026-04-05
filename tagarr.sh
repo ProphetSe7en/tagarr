@@ -1407,8 +1407,11 @@ main() {
   # SUMMARY OUTPUT (per release group)
   ########################################
 
+  declare -A _summary_seen; _summary_seen[_]=1; unset "_summary_seen[_]"
   for cfg in "${RELEASE_GROUPS[@]}"; do
     IFS=':' read -r search tag_name display_name mode <<< "$cfg"
+    [ -n "${_summary_seen[$tag_name]:-}" ] && continue
+    _summary_seen["$tag_name"]=1
 
     local pm=${stats_primary_matched["$tag_name"]:-0}
     local pt=${stats_primary_tagged["$tag_name"]:-0}
@@ -1596,8 +1599,11 @@ main() {
   local total_secondary_kept=0
   local total_secondary_notfound=0
 
+  declare -A _totals_seen; _totals_seen[_]=1; unset "_totals_seen[_]"
   for cfg in "${RELEASE_GROUPS[@]}"; do
     IFS=':' read -r search tag_name display_name mode <<< "$cfg"
+    [ -n "${_totals_seen[$tag_name]:-}" ] && continue
+    _totals_seen["$tag_name"]=1
     total_primary_tagged=$((total_primary_tagged + ${stats_primary_tagged["$tag_name"]:-0}))
     total_primary_removed=$((total_primary_removed + ${stats_primary_untagged["$tag_name"]:-0}))
     total_primary_kept=$((total_primary_kept + ${stats_primary_existing["$tag_name"]:-0}))
@@ -1996,8 +2002,11 @@ ${chunk_list}\`\`\`"
     log "${CYAN}CLEANUP: Checking for unused tags${RESET}"
     log "${CYAN}========================================${RESET}"
 
+    declare -A _cleanup_seen; _cleanup_seen[_]=1; unset "_cleanup_seen[_]"
     for cfg in "${RELEASE_GROUPS[@]}"; do
       IFS=':' read -r search tag_name display_name mode <<< "$cfg"
+      [ -n "${_cleanup_seen[$tag_name]:-}" ] && continue
+      _cleanup_seen["$tag_name"]=1
 
       # Check primary
       local primary_tag_id="${primary_tag_ids[$tag_name]:-}"
