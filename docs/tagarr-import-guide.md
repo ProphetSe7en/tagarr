@@ -203,8 +203,18 @@ Unlike the batch script where you run discovery periodically, the import script 
 3. In Radarr: **Settings > Connect > + > Custom Script**
    - Name: `Tagarr Import`
    - Path: full path to `tagarr_import.sh`
-   - Events: **On Download**, **On Upgrade**, **On Movie File Delete**
+   - Events: **On File Import**, **On File Upgrade**, and **On Movie File Delete**
 4. Click **Test** — you should see a test notification in the log (and Discord if enabled)
+
+**Which events to enable and why:**
+
+| Event | Enable | Purpose |
+|-------|--------|---------|
+| **On File Import** | Yes | Fires after Radarr finishes importing a new file. All file metadata (release group, quality, audio) is available. This triggers tagging, recovery, discovery, and secondary sync. |
+| **On File Upgrade** | Yes | Fires after Radarr replaces a file with a better version. The new file is evaluated fresh — old tags that no longer match are removed, new tags are applied. |
+| **On Movie File Delete** | Yes | Fires when you manually delete a file from Radarr. Removes all managed tags since the file they refer to no longer exists. The movie stays in Radarr without tags, ready to be re-grabbed. |
+| **On Grab** | No | Fires when Radarr sends a release to the download client — **before the file exists**. No file metadata is available (no path, no release group, no quality info). The script cannot tag, recover, or filter anything at this point. |
+| **On Movie File Delete For Upgrade** | No | Fires when the old file is deleted during an upgrade, right before the new file is imported. Enabling this would remove all tags and then immediately re-add them when On File Upgrade fires — unnecessary work. |
 
 ### Sonarr (tagarr_import_sonarr.sh)
 
@@ -213,8 +223,17 @@ Unlike the batch script where you run discovery periodically, the import script 
 3. In Sonarr: **Settings > Connect > + > Custom Script**
    - Name: `Tagarr Import Sonarr`
    - Path: full path to `tagarr_import_sonarr.sh`
-   - Events: **On Download** (covers both new downloads and upgrades in Sonarr)
+   - Events: **On File Import** and **On Upgrade**
 4. Click **Test** — you should see a test notification in the log (and Discord if enabled)
+
+**Which events to enable and why:**
+
+| Event | Enable | Purpose |
+|-------|--------|---------|
+| **On File Import** | Yes | Fires after Sonarr imports a new episode file. All per-file metadata is available: episode file ID, release group, quality, scene name. Works for both single episodes and season packs (fires once per episode). |
+| **On Upgrade** | Yes | Fires after Sonarr replaces a file with a better version. Same per-file metadata as On File Import, with `sonarr_isupgrade=True` and `sonarr_deletedpaths` showing the old file. Required for both single episode upgrades and season pack upgrades. Without this, upgrades are silently ignored. |
+| **On Import Complete** | No | Fires after all files from a download batch are imported. Uses plural variable names (`sonarr_episodefile_ids`, `sonarr_episodefile_releasegroups`) instead of the singular forms the script expects. Would cause the script to see an empty release group and trigger unnecessary recovery. |
+| **On Grab** | No | Same as Radarr — fires before the file exists. No file metadata available. |
 
 **Docker users:** These scripts run inside the Radarr/Sonarr container's filesystem. The script path in Connect must point to a location inside the container, not on the host. Mount the scripts directory as a read-only volume:
 
@@ -494,17 +513,16 @@ LOG_FILE="${SCRIPT_DIR}/logs/tagarr_import_sonarr.log"
 | Event | What Happens |
 |-------|-------------|
 | **Test** | Verifies the script works, sends test notification to Discord if enabled, exits. |
-| **Download** | Full pipeline: recover missing group → tag by release group → discover new groups → sync to secondary → send Discord notification. |
-| **Upgrade** | Same as Download — the new file is evaluated fresh. Old tags that no longer match are removed. |
-| **MovieFileDelete** | Removes all managed tags (tags listed in `RELEASE_GROUPS`) from the movie. Does not touch other tags. Also syncs the removal to secondary if enabled. |
-| **MovieFileDeleteForUpgrade** | Same as MovieFileDelete — tags are removed before the upgrade arrives with its own Download event. |
+| **File Import** | Full pipeline: recover missing group → tag by release group → discover new groups → sync to secondary → send Discord notification. Radarr internally calls this event `Download`. All file metadata is available: release group, quality, audio codec, file path, scene name. |
+| **File Upgrade** | Same as File Import — the new file is evaluated fresh. Tags are applied based on the new file's release group and quality. Radarr sets `radarr_isupgrade=True` to distinguish from new imports. |
+| **Movie File Delete** | Removes all managed tags (tags listed in `RELEASE_GROUPS`) from the movie. Does not touch other tags (renamed, upgradinatorr, etc.). Also syncs the removal to secondary if enabled. The movie remains in Radarr — only the file and its tags are gone. Radarr sets `radarr_moviefile_deletereason=Manual` for manual deletes. |
 
 ### Sonarr (tagarr_import_sonarr.sh)
 
 | Event | What Happens |
 |-------|-------------|
 | **Test** | Verifies the script works, sends test notification to Discord if enabled, exits. |
-| **Download** | Sonarr uses "Download" for both new downloads and upgrades. The script checks if the episode has a release group (from event env var → API → grab history recovery). If recovery was needed and successful, sends Discord notification. |
+| **File Import** | The script checks if the episode has a release group (from event env var → API → grab history recovery). If recovery was needed and successful, triggers a rename and sends Discord notification. Sonarr uses this same event for both new downloads and upgrades — when it's an upgrade, `sonarr_deletedpaths` contains the old file that was replaced. |
 | All other events | Ignored — the script exits immediately. |
 
 ---
