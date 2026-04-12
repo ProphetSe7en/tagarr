@@ -33,7 +33,7 @@
 # Test with a single movie before enabling as a Radarr Connect handler.
 # -----------------------------------------------------------------------------
 
-SCRIPT_VERSION="1.3.3"
+SCRIPT_VERSION="1.5.0"
 
 ########################################
 # CONFIG LOADING
@@ -102,6 +102,366 @@ if [ "${ENABLE_LOGGING:-true}" = "true" ] && [ -n "${LOG_FILE:-}" ] && [ -f "$LO
         mv "$LOG_FILE" "${LOG_FILE}.old"
         log "INFO" "Log rotated - previous log saved as ${LOG_FILE}.old"
     fi
+fi
+
+################################################################################
+# HANDLE RADARR GRAB EVENT — qBit torrent rename to match Radarr grab title
+#
+# Fires when Radarr sends a release to the download client. Renames the qBit
+# display name to match radarr_release_title so Radarr's import parser sees
+# the full release name (with all CF-relevant tokens) and scores correctly.
+# This prevents download loops where stripped torrent names cause score drops.
+#
+# Discord notification is only sent when meaningful tokens were recovered
+# (release group, WEB-DL, IMAX, MA, TrueHD, etc.). Plain cosmetic renames
+# (dots vs spaces, DD+ vs DD plus) are silent.
+#
+# Idempotent — skips when qBit name already equals grab title.
+# Never modifies files or folders on disk.
+################################################################################
+
+if [ "$EVENT_TYPE" = "Grab" ]; then
+    log "INFO" "============================================"
+    log "INFO" "Tagarr Import v${SCRIPT_VERSION}"
+    log "INFO" "Event: Grab"
+    log "INFO" "============================================"
+
+    # Feature toggle (default off — must be explicitly enabled in config)
+    if [ "${ENABLE_GRAB_RENAME:-false}" != "true" ]; then
+        log "INFO" "ENABLE_GRAB_RENAME is not true — skipping"
+        exit 0
+    fi
+
+    GRAB_RG="${radarr_release_releasegroup:-}"
+    GRAB_TITLE="${radarr_release_title:-}"
+    GRAB_HASH="${radarr_download_id:-}"
+    GRAB_CLIENT="${radarr_download_client:-}"
+
+    if [ -z "$GRAB_RG" ] || [ -z "$GRAB_TITLE" ] || [ -z "$GRAB_HASH" ] || [ -z "$GRAB_CLIENT" ]; then
+        log "WARN" "Missing required env vars (rg='$GRAB_RG' title='$GRAB_TITLE' hash='$GRAB_HASH' client='$GRAB_CLIENT') — skip"
+        exit 0
+    fi
+
+    log "INFO" "Movie:   ${radarr_movie_title:-?} (${radarr_movie_year:-?})"
+    log "INFO" "Release: $GRAB_TITLE"
+    log "INFO" "Group:   $GRAB_RG"
+    log "INFO" "Client:  $GRAB_CLIENT"
+    log "INFO" "Hash:    $GRAB_HASH"
+
+    # Map download client name to qBit URL (case-insensitive match)
+    if [ "${#QBIT_CLIENTS[@]}" -eq 0 ]; then
+        log "WARN" "QBIT_CLIENTS is empty or unset — skip"
+        exit 0
+    fi
+
+    qbit_url=""
+    grab_client_lower="${GRAB_CLIENT,,}"
+    for entry in "${QBIT_CLIENTS[@]}"; do
+        client_name="${entry%%:*}"
+        client_url="${entry#*:}"
+        if [ "${client_name,,}" = "$grab_client_lower" ]; then
+            qbit_url="$client_url"
+            break
+        fi
+    done
+
+    if [ -z "$qbit_url" ]; then
+        log "WARN" "Download client '$GRAB_CLIENT' not in QBIT_CLIENTS map — skip"
+        exit 0
+    fi
+
+    log "INFO" "qBit URL: $qbit_url"
+
+    # Fetch current torrent info from qBit (case-insensitive hash)
+    hash_lower="${GRAB_HASH,,}"
+    qbit_info=$(curl -sS --max-time 10 "${qbit_url}/api/v2/torrents/info?hashes=${hash_lower}" 2>/dev/null)
+
+    if [ -z "$qbit_info" ] || [ "$qbit_info" = "[]" ]; then
+        log "WARN" "Torrent $hash_lower not found in qBit (yet?) — skip"
+        exit 0
+    fi
+
+    current_name=$(echo "$qbit_info" | jq -r '.[0].name // ""' 2>/dev/null)
+    if [ -z "$current_name" ]; then
+        log "WARN" "Could not parse qBit torrent name — skip"
+        exit 0
+    fi
+
+    log "INFO" "Current qBit name: $current_name"
+
+    # Idempotent: if name is already exactly the grab title, skip
+    if [ "$current_name" = "$GRAB_TITLE" ]; then
+        log "INFO" "qBit name already equals grab title — no rename needed"
+        exit 0
+    fi
+
+    # Scene detection — uses the same logic as TRaSH Scene CF:
+    # 1) Resolution + WEB (not followed by DL) = scene naming pattern
+    # 2) Known scene release groups from TRaSH Scene CF
+    # Source: docs/json/radarr/cf/scene.json in TRaSH-Guides repo
+    _is_scene() {
+        local name="$1"
+        # Pattern 1: has resolution + WEB without DL (scene naming)
+        if echo "$name" | grep -Eqi '\b[0-9]{3,4}p\b' && \
+           echo "$name" | grep -Eqi '(^|[_. ])WEB([_. ]|$)' && \
+           ! echo "$name" | grep -Eqi 'WEB[-.]?DL'; then
+            return 0
+        fi
+        # Pattern 2: known scene groups (from TRaSH Scene CF)
+        if echo "$name" | grep -Eqi '-(CAKES|GGEZ|GGWP|GLHF|GOSSIP|NAISU|KOGI|PECULATE|SLOT|EDITH|ETHEL|ELEANOR|B2B|SPAMnEGGS|FTP|DiRT|SYNCOPY|BAE|SuccessfulCrab|NHTFS|SURCODE|B0MBARDIERS|D3US|BROTHERHOOD|W4K|STRiKES)\b'; then
+            return 0
+        fi
+        return 1
+    }
+
+    is_scene_before=false
+    is_scene_after=false
+    _is_scene "$current_name" && is_scene_before=true
+    _is_scene "$GRAB_TITLE" && is_scene_after=true
+
+    if [ "$is_scene_before" = "true" ]; then
+        log "INFO" "Scene release detected (original torrent name matches Scene CF pattern)"
+        if [ "${GRAB_RENAME_EXCLUDE_SCENE:-false}" = "true" ]; then
+            log "INFO" "GRAB_RENAME_EXCLUDE_SCENE is true — skipping rename for scene release"
+            exit 0
+        fi
+    fi
+
+    # Track whether rename changes Scene CF matching (scene before but not after)
+    scene_cf_changed=false
+    if [ "$is_scene_before" = "true" ] && [ "$is_scene_after" = "false" ]; then
+        scene_cf_changed=true
+        log "INFO" "Rename will change Scene CF matching: scene → non-scene"
+    fi
+
+    # Compute diff: which tokens are present in grab title but absent in qBit name.
+    # Used for both log output and Discord notification.
+    # Helper: returns true if grab has the pattern but qBit name does not.
+    _added() {
+        local regex="$1"
+        ! echo "$current_name" | grep -Eqi "$regex" && \
+          echo "$GRAB_TITLE"  | grep -Eqi "$regex"
+    }
+
+    diff_tokens=()
+
+    # Release group suffix (literal match, regex-safe)
+    if ! echo "$current_name" | grep -qiF -- "-${GRAB_RG}"; then
+        diff_tokens+=("-${GRAB_RG} (release group)")
+    fi
+
+    # Token detection — check which CF-relevant tokens are in the grab title
+    # but missing from the qBit torrent name. These are the tokens that matter
+    # for Radarr's Custom Format scoring. Only these trigger Discord notification.
+    #
+    # Source + audio patterns mirror check_quality_match / check_audio_match
+    # below (~lines 525-575). Update both together.
+    ma_or_play_added=false
+    _added '\bma(\]?\s*\[?|[._-])web([-.]?dl)?'   && { diff_tokens+=("MA WEB-DL"); ma_or_play_added=true; }
+    _added '\bplay(\]?\s*\[?|[._-])web([-.]?dl)?' && { diff_tokens+=("Play WEB-DL"); ma_or_play_added=true; }
+    # Standalone WEB-DL only when MA/Play didn't already cover it
+    [ "$ma_or_play_added" = "false" ] && _added '\bweb[-.]?dl\b' && diff_tokens+=("WEB-DL")
+    _added '\bimax\b'                              && diff_tokens+=("IMAX")
+    _added '\btruehd\b'                            && diff_tokens+=("TrueHD")
+    _added '\batmos\b'                             && diff_tokens+=("Atmos")
+    _added '\bdts[._-]?x\b'                        && diff_tokens+=("DTS-X")
+    _added '\bdts[._ -]?hd[._ -]?ma\b'             && diff_tokens+=("DTS-HD MA")
+
+    # Build comma-space-separated summary string for the "Tokens added" field
+    if [ "${#diff_tokens[@]}" -gt 0 ]; then
+        printf -v diff_summary '%s, ' "${diff_tokens[@]}"
+        diff_summary="${diff_summary%, }"
+        log "INFO" "Tokens added by rename: $diff_summary"
+    else
+        # No meaningful tokens to recover — skip rename entirely.
+        # Cosmetic differences (dots vs spaces, reordering) don't affect
+        # Radarr's import scoring and renaming can interfere with queue tracking.
+        log "INFO" "No meaningful tokens to recover — skipping rename (cosmetic only)"
+        exit 0
+    fi
+
+    # Build natural-language description for Discord (separate from token list)
+    group_recovered=false
+    other_tokens=()
+    for t in "${diff_tokens[@]}"; do
+        if [[ "$t" == *"(release group)"* ]]; then
+            group_recovered=true
+        else
+            other_tokens+=("$t")
+        fi
+    done
+
+    if [ "${#other_tokens[@]}" -gt 0 ]; then
+        printf -v others_str '**%s**, ' "${other_tokens[@]}"
+        others_str="${others_str%, }"
+    else
+        others_str=""
+    fi
+
+    if [ "$group_recovered" = "true" ] && [ -n "$others_str" ]; then
+        summary_text="Recovered release group **${GRAB_RG}** and added ${others_str}"
+    elif [ "$group_recovered" = "true" ]; then
+        summary_text="Recovered release group **${GRAB_RG}**"
+    elif [ -n "$others_str" ]; then
+        summary_text="Added ${others_str}"
+    else
+        summary_text="Cosmetic rename — no scoring impact tracked"
+    fi
+
+    # Execute rename
+    log "INFO" "Renaming qBit torrent to: $GRAB_TITLE"
+    rename_response=$(curl -sS --max-time 10 -w "\nHTTP_CODE:%{http_code}" \
+        -X POST "${qbit_url}/api/v2/torrents/rename" \
+        --data-urlencode "hash=${hash_lower}" \
+        --data-urlencode "name=${GRAB_TITLE}" 2>/dev/null)
+    rename_http=$(echo "$rename_response" | grep "HTTP_CODE:" | tail -1 | cut -d: -f2)
+
+    if [ "$rename_http" = "200" ]; then
+        log "INFO" "Rename successful (HTTP 200)"
+    else
+        log "WARN" "Rename failed (HTTP $rename_http)"
+        exit 0
+    fi
+
+    # Discord notification — only when meaningful tokens were recovered or
+    # Scene CF matching was changed by the rename. Plain cosmetic renames are silent.
+    if [ "${DISCORD_ENABLED:-false}" = "true" ] && [ -n "${DISCORD_WEBHOOK_URL:-}" ] && \
+       { [ "${#diff_tokens[@]}" -gt 0 ] || [ "$scene_cf_changed" = "true" ]; }; then
+        # Fetch movie details for poster (Grab handler exits before main flow runs)
+        grab_poster_url=""
+        grab_movie_id="${radarr_movie_id:-}"
+        if [ -n "$grab_movie_id" ] && [ -n "${PRIMARY_RADARR_API_URL:-}" ] && [ -n "${PRIMARY_RADARR_API_KEY:-}" ]; then
+            grab_movie_json=$(curl -sS --max-time 5 "${PRIMARY_RADARR_API_URL}/movie/${grab_movie_id}?apikey=${PRIMARY_RADARR_API_KEY}" 2>/dev/null)
+            if [ -n "$grab_movie_json" ] && [ "$grab_movie_json" != "null" ]; then
+                grab_poster_url=$(echo "$grab_movie_json" | jq -r '.remotePoster // ""' 2>/dev/null)
+                if [ -z "$grab_poster_url" ] || [ "$grab_poster_url" = "null" ]; then
+                    grab_poster_url=$(echo "$grab_movie_json" | jq -r '.images[]? | select(.coverType == "poster") | .remoteUrl // .url // empty' 2>/dev/null | head -1)
+                fi
+            fi
+        fi
+        [ "$grab_poster_url" = "null" ] && grab_poster_url=""
+
+        # Categorize tokens into quality/audio for separate fields
+        quality_fixed=""
+        audio_parts=()
+        for t in "${other_tokens[@]}"; do
+            case "$t" in
+                "MA WEB-DL"|"Play WEB-DL"|"WEB-DL"|"IMAX")
+                    quality_fixed="${quality_fixed:+$quality_fixed, }$t"
+                    ;;
+                "TrueHD"|"Atmos"|"DTS-X"|"DTS-HD MA")
+                    audio_parts+=("$t")
+                    ;;
+            esac
+        done
+
+        # Combine TrueHD + Atmos into the natural "TrueHD Atmos" string
+        audio_fixed=""
+        if [ "${#audio_parts[@]}" -gt 0 ]; then
+            has_truehd=false
+            has_atmos=false
+            other_audio=()
+            for a in "${audio_parts[@]}"; do
+                case "$a" in
+                    TrueHD) has_truehd=true ;;
+                    Atmos)  has_atmos=true ;;
+                    *)      other_audio+=("$a") ;;
+                esac
+            done
+            if [ "$has_truehd" = "true" ] && [ "$has_atmos" = "true" ]; then
+                audio_fixed="TrueHD Atmos"
+            elif [ "$has_truehd" = "true" ]; then
+                audio_fixed="TrueHD"
+            elif [ "$has_atmos" = "true" ]; then
+                audio_fixed="Atmos"
+            fi
+            if [ "${#other_audio[@]}" -gt 0 ]; then
+                for a in "${other_audio[@]}"; do
+                    if [ -z "$audio_fixed" ]; then
+                        audio_fixed="$a"
+                    else
+                        audio_fixed="${audio_fixed}, $a"
+                    fi
+                done
+            fi
+        fi
+
+        notif_title="Renamed - ${radarr_movie_title:-Unknown} (${radarr_movie_year:-?})"
+
+        # Always orange — matches Radarr's existing Tagged notifications
+        notif_color=16753920  # Orange (0xFFA500)
+
+        # Build fields dynamically — only include what was actually recovered
+        fields_json='[]'
+
+        fields_json=$(echo "$fields_json" | jq \
+            --arg val "$GRAB_CLIENT" \
+            '. += [{ name: "Renamed in", value: $val, inline: false }]')
+
+        if [ "$group_recovered" = "true" ]; then
+            fields_json=$(echo "$fields_json" | jq \
+                --arg val "$GRAB_RG" \
+                '. += [{ name: "Release Group Recovered", value: $val, inline: true }]')
+        fi
+
+        if [ -n "$quality_fixed" ]; then
+            fields_json=$(echo "$fields_json" | jq \
+                --arg val "$quality_fixed" \
+                '. += [{ name: "Quality Recovered", value: $val, inline: true }]')
+        fi
+
+        if [ -n "$audio_fixed" ]; then
+            fields_json=$(echo "$fields_json" | jq \
+                --arg val "$audio_fixed" \
+                '. += [{ name: "Audio Recovered", value: $val, inline: true }]')
+        fi
+
+        if [ "$scene_cf_changed" = "true" ]; then
+            fields_json=$(echo "$fields_json" | jq \
+                '. += [{ name: "⚠️ Scene CF", value: "No longer matches after rename", inline: true }]')
+        fi
+
+        fields_json=$(echo "$fields_json" | jq \
+            --arg event "Grab" \
+            --arg old "$current_name" \
+            --arg new "$GRAB_TITLE" \
+            '. += [
+                { name: "Event", value: $event, inline: true },
+                { name: "Original Name", value: $old, inline: false },
+                { name: "New Name", value: $new, inline: false }
+            ]')
+
+        payload=$(jq -n \
+            --arg title "$notif_title" \
+            --argjson color "$notif_color" \
+            --arg poster_url "$grab_poster_url" \
+            --argjson fields "$fields_json" \
+            --arg footer_text "Tagarr Import v${SCRIPT_VERSION} by ProphetSe7en" \
+            --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
+            '{
+                embeds: [{
+                    title: $title,
+                    color: $color,
+                    fields: $fields,
+                    footer: { text: $footer_text },
+                    timestamp: $timestamp,
+                    thumbnail: { url: $poster_url }
+                }]
+            }')
+        response=$(curl -sS -w "\nHTTP_CODE:%{http_code}" --max-time 10 \
+            -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$payload" 2>/dev/null)
+        http_code=$(echo "$response" | grep "HTTP_CODE:" | tail -1 | cut -d: -f2)
+        if [ "$http_code" = "204" ] || [ "$http_code" = "200" ]; then
+            log "INFO" "Discord notification sent successfully"
+        else
+            log "WARN" "Discord notification failed (HTTP $http_code)"
+        fi
+    fi
+
+    log "INFO" "Grab handler complete"
+    exit 0
 fi
 
 ################################################################################
@@ -973,7 +1333,7 @@ if [ "${DISCORD_ENABLED:-false}" = "true" ] && { [ "$tagged" = "true" ] || [ "$d
     if [ "$recover_done" = "true" ]; then
         fields_json=$(echo "$fields_json" | jq \
             --arg recovered "$RECOVER_GROUP" \
-            '. += [{ name: "Release Group Fixed", value: $recovered, inline: true }]')
+            '. += [{ name: "Release Group Recovered", value: $recovered, inline: true }]')
     fi
 
     # Discovery field

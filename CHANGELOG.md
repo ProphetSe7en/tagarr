@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.2.0 — 2026-04-12
+
+### Added (tagarr_import.sh v1.5.0) [EXPERIMENTAL]
+
+- **Grab rename on all grabs** — `ENABLE_GRAB_RENAME` now renames ALL grabs (removed `GRAB_RENAME_GROUPS` whitelist). Only renames when meaningful CF tokens differ between torrent name and grab title — cosmetic differences (dots vs spaces, reordering) are skipped entirely.
+- **Scene detection** — Detects scene releases using the same pattern as TRaSH Scene CF (WEB without DL + known scene groups). New `GRAB_RENAME_EXCLUDE_SCENE` option (default: false) to skip rename for scene releases.
+- **Scene CF warning** — When a scene release is renamed and Scene CF no longer matches (e.g. WEB → WEB-DL), Discord notification includes a ⚠️ Scene CF warning field.
+- **New diff tokens** — WEB-DL (catches WEB → WEB-DL, prevents Scene CF -10000 penalty) and IMAX/IMAX Enhanced.
+- **Prowlarr guidance in config** — Explains the release name vs filename trade-off and its impact on scene detection.
+
+### Changed
+
+- **Notification wording** — "Fixed" → "Recovered" (rename doesn't guarantee import outcome).
+- **No cosmetic renames** — Grabs where only dots/spaces/ordering differ are left untouched, preventing potential Radarr queue tracking issues.
+
 ## v2.1.1 — 2026-04-05
 
 ### Fixed

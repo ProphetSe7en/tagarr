@@ -9,7 +9,7 @@
 #
 # Setup: Radarr > Settings > Connect > Custom Script
 #   Path: /scripts/tagarr_import.sh
-#   Events: On Download, On Upgrade, On Movie File Delete
+#   Events: On Grab (optional), On Download, On Upgrade, On Movie File Delete
 #
 # This config is separate from tagarr.conf — both are independent and
 # can have different release groups, webhooks, and filter settings.
@@ -83,13 +83,80 @@ ENABLE_TRUEHD_ATMOS=true   # Dolby TrueHD Atmos (lossless + spatial audio)
 ENABLE_DTS_X=true          # DTS:X (lossless + spatial, DTS equivalent of Atmos)
 ENABLE_DTS_HD_MA=true      # DTS-HD Master Audio (lossless surround)
 
-# === RELEASE GROUP RECOVERY ===
+# === RELEASE GROUP RECOVERY (post-import fix) ===
 # When the imported movie has an empty/unknown release group, recover it
 # using the download ID from the Radarr Connect event. The download ID
 # matches the exact grab that produced this import — no guessing needed.
 # Recovery runs before tagging so the recovered group is available for
 # tag matching. A rename is triggered after recovery.
+#
+# This is a POST-IMPORT fix: it only helps when import succeeded but the
+# release group field ended up empty. For releases that fail to import
+# entirely (e.g., due to score drops from stripped filenames), see the
+# GRAB-TIME RENAME section below — it prevents the problem at the source.
+# The two are complementary; with grab rename active for whitelisted groups,
+# recovery rarely needs to fire for those groups.
 ENABLE_RECOVER=true
+
+# === GRAB-TIME RENAME (pre-import metadata fix) [EXPERIMENTAL] ===
+# When Radarr grabs a release, this renames the qBit display name to
+# match radarr_release_title. This ensures Radarr's import parser sees
+# the full release name with all CF-relevant tokens (release group,
+# WEB-DL, IMAX, audio codecs etc.), preventing download loops where
+# stripped torrent names cause score drops below the upgrade threshold.
+#
+# Runs on ALL grabs when enabled. The rename is purely cosmetic (qBit
+# display name only, never touches files on disk), but Radarr uses it
+# as sceneName for import scoring.
+#
+# Discord notification is only sent when meaningful tokens were recovered
+# (e.g. release group added, WEB→WEB-DL, IMAX recovered). Plain cosmetic
+# renames (dots vs spaces) are silent — no notification spam.
+#
+# IMPORTANT — Prowlarr setting:
+# This feature works best when Prowlarr is set to use the RELEASE NAME
+# from the indexer, not the actual filename. This is configured per
+# indexer in Prowlarr under Settings > Indexers > (edit) > "Use File
+# Names for Single Episode Results" = OFF (or equivalent setting).
+#
+# Why: Many release groups (e.g. 126811) strip metadata from their
+# filenames — the actual torrent file might be named just
+# "Movie.2024.1080p.WEB.H264" while the indexer's release name is
+# "Movie.2024.1080p.MA.WEB-DL.TrueHD.Atmos.H.265-126811". Using the
+# release name gives Radarr (and this script) the full metadata.
+#
+# Trade-off: Some trackers rename scene "WEB" releases to "WEB-DL" in
+# their release names. This means scene releases may appear as WEB-DL
+# instead of WEB, which bypasses the Scene Custom Format penalty. See
+# GRAB_RENAME_EXCLUDE_SCENE below to control this behavior.
+#
+# To enable: Add "On Grab" to the Connect handler events in Radarr UI.
+ENABLE_GRAB_RENAME=false
+
+# Scene release handling for grab rename.
+# Scene releases are detected from the original torrent name using the
+# same pattern as TRaSH Scene CF (WEB without DL, or known scene groups).
+#
+# false (default) = Rename ALL grabs including scene. If the rename
+#   changes Scene CF matching (e.g. torrent has WEB, grab title has
+#   WEB-DL), a Discord notification is sent with a Scene CF warning.
+#   This gives consistent import scoring but means the Scene CF penalty
+#   (-10000) won't apply to renamed scene releases.
+#
+# true = Skip rename for detected scene releases. Preserves accurate
+#   scene detection but may cause download loops if the tracker renamed
+#   WEB to WEB-DL in the release name — Radarr grabs at WEB-DL score
+#   but imports at WEB score (lower), triggering re-grab.
+GRAB_RENAME_EXCLUDE_SCENE=false
+
+# Map Radarr's "Download Client" name (Settings > Download Clients > Name)
+# to its qBit Web UI URL. The script picks the right qBit instance based
+# on which client Radarr used for the grab. Subnet whitelist or unauthenticated
+# access is required — no credentials are supported in this map.
+QBIT_CLIENTS=(
+    "qBit-movies:http://your-host:8080"
+    # "qBit-tv:http://your-host:8081"
+)
 
 # === DISCOVERY ===
 # When the imported movie's release group is not in RELEASE_GROUPS (active
