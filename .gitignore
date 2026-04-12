@@ -20,3 +20,4 @@ generate_samples.sh
 
 # Work copies
 work/
+qbittorrent_auto_tagger.py
