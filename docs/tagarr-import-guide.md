@@ -213,7 +213,7 @@ Unlike the batch script where you run discovery periodically, the import script 
 | **On File Import** | Yes | Fires after Radarr finishes importing a new file. All file metadata (release group, quality, audio) is available. This triggers tagging, recovery, discovery, and secondary sync. |
 | **On File Upgrade** | Yes | Fires after Radarr replaces a file with a better version. The new file is evaluated fresh — old tags that no longer match are removed, new tags are applied. |
 | **On Movie File Delete** | Yes | Fires when you manually delete a file from Radarr. Removes all managed tags since the file they refer to no longer exists. The movie stays in Radarr without tags, ready to be re-grabbed. |
-| **On Grab** | No | Fires when Radarr sends a release to the download client — **before the file exists**. No file metadata is available (no path, no release group, no quality info). The script cannot tag, recover, or filter anything at this point. |
+| **On Grab** | Optional | Fires when Radarr sends a release to the download client. Enables the **Grab Rename** feature (`ENABLE_GRAB_RENAME`) which renames the qBit display name to match the grab title, recovering missing CF tokens (release group, MA WEB-DL, WEB-DL, IMAX, audio codecs). Only renames when meaningful tokens differ — cosmetic differences are skipped. See the `GRAB_RENAME` section in the config file for details, including Prowlarr setup and scene handling. **[EXPERIMENTAL]** |
 | **On Movie File Delete For Upgrade** | No | Fires when the old file is deleted during an upgrade, right before the new file is imported. Enabling this would remove all tags and then immediately re-add them when On File Upgrade fires — unnecessary work. |
 
 ### Sonarr (tagarr_import_sonarr.sh)
@@ -233,7 +233,7 @@ Unlike the batch script where you run discovery periodically, the import script 
 | **On File Import** | Yes | Fires after Sonarr imports a new episode file. All per-file metadata is available: episode file ID, release group, quality, scene name. Works for both single episodes and season packs (fires once per episode). |
 | **On Upgrade** | Yes | Fires after Sonarr replaces a file with a better version. Same per-file metadata as On File Import, with `sonarr_isupgrade=True` and `sonarr_deletedpaths` showing the old file. Required for both single episode upgrades and season pack upgrades. Without this, upgrades are silently ignored. |
 | **On Import Complete** | No | Fires after all files from a download batch are imported. Uses plural variable names (`sonarr_episodefile_ids`, `sonarr_episodefile_releasegroups`) instead of the singular forms the script expects. Would cause the script to see an empty release group and trigger unnecessary recovery. |
-| **On Grab** | No | Same as Radarr — fires before the file exists. No file metadata available. |
+| **On Grab** | No | Grab Rename is only implemented for Radarr (`tagarr_import.sh`). The Sonarr script does not have this feature. |
 
 **Docker users:** These scripts run inside the Radarr/Sonarr container's filesystem. The script path in Connect must point to a location inside the container, not on the host. Mount the scripts directory as a read-only volume:
 
@@ -364,6 +364,31 @@ ENABLE_RECOVER=true
 | `ENABLE_RECOVER` | When `true`, the script attempts to recover missing release groups before tagging. If the imported movie has an empty or "Unknown" release group, the script looks up the grab event using the download ID from the Radarr Connect event. If a matching grab is found with a release group, it patches the group onto the movie file and triggers a rename. Recovery runs before tagging, so the recovered group is available for tag matching. Set to `false` to disable recovery and only perform tagging. |
 
 **How this differs from tagarr_recover.sh:** The import script uses the download ID provided directly by the Radarr Connect event — a guaranteed exact match. The batch recovery script walks through history and uses a 5-point safety chain because it doesn't have a download ID from an event. The import method is simpler and more reliable for new imports.
+
+### Grab Rename [EXPERIMENTAL]
+
+```bash
+ENABLE_GRAB_RENAME=false
+GRAB_RENAME_EXCLUDE_SCENE=false
+```
+
+Renames the qBit display name to match the Radarr grab title when meaningful CF tokens differ between the torrent name and the grab title. This ensures Radarr's import parser sees the full release name with all Custom Format-relevant tokens, preventing download loops where stripped torrent names cause score drops.
+
+**Requires:** "On Grab" must be enabled in the Radarr Connect handler events.
+
+| Option | Description |
+|--------|-------------|
+| `ENABLE_GRAB_RENAME` | When `true`, the script renames the qBit display name on every grab where meaningful tokens differ. Only changes the display name (cosmetic) — never touches files or folders on disk. Radarr uses this name as `sceneName` for import scoring. Cosmetic-only differences (dots vs spaces, reordering) are skipped entirely. |
+| `GRAB_RENAME_EXCLUDE_SCENE` | When `true`, scene releases are detected and skipped (no rename). Scene detection uses the same pattern as TRaSH Scene CF: resolution + `WEB` without `DL`, or known scene release groups. When `false` (default), scene releases are renamed like everything else. If the rename changes Scene CF matching (e.g. `WEB` → `WEB-DL`), Discord notification includes a ⚠️ Scene CF warning. |
+| `QBIT_CLIENTS` | Maps Radarr's download client name to the qBit Web UI URL. The script picks the right qBit instance based on which client Radarr used for the grab. Format: `"ClientName:http://host:port"`. |
+
+**Tokens detected:** Release group, MA WEB-DL, Play WEB-DL, WEB-DL, IMAX, TrueHD, Atmos, DTS-X, DTS-HD MA. Only these trigger a rename and Discord notification.
+
+**Prowlarr setup:** This feature works best when Prowlarr is set to use the **release name** from the indexer, not the actual filename. Many release groups (e.g. 126811) strip metadata from filenames — the torrent file might be named `Movie.2024.1080p.WEB.H264` while the indexer's release name is `Movie.2024.1080p.MA.WEB-DL.TrueHD.Atmos.H.265-126811`. Using the release name gives Radarr (and this script) the full metadata.
+
+**Trade-off:** Some trackers rename scene `WEB` releases to `WEB-DL` in their release names. This means scene releases may appear as WEB-DL instead of WEB, which bypasses the Scene CF penalty (-10000). Use `GRAB_RENAME_EXCLUDE_SCENE=true` if you prefer accurate scene detection over consistent import scoring — but note this may cause download loops for scene releases where the tracker renamed WEB to WEB-DL.
+
+**How it relates to Recovery:** Recovery (`ENABLE_RECOVER`) fixes missing release groups **after** import. Grab rename fixes metadata **before** import, preventing the score drop that causes download loops. For affected releases, grab rename makes recovery largely redundant — the metadata is correct from the start. Both can be enabled together safely.
 
 ### Discovery
 
