@@ -77,6 +77,22 @@ for arg in "$@"; do
 done
 OLD_CONFIG="${ARGS[0]:-}"
 
+# --- Self-update: check for newer version of this script ---
+# Runs BEFORE config detection so old scripts get auto-detect on re-exec
+if [ "$NO_UPDATE" = "false" ] && [ "${TAGARR_MIGRATE_NO_UPDATE:-}" != "1" ]; then
+    latest=$(mktemp)
+    if curl -fsSL "$SELF_URL" -o "$latest" 2>/dev/null; then
+        if ! cmp -s "$SCRIPT_PATH" "$latest"; then
+            echo "Updating migration script to latest version..."
+            cp "$latest" "$SCRIPT_PATH"
+            chmod +x "$SCRIPT_PATH"
+            rm -f "$latest"
+            TAGARR_MIGRATE_NO_UPDATE=1 exec "$SCRIPT_PATH" "$@"
+        fi
+    fi
+    rm -f "$latest"
+fi
+
 # Auto-detect: if no config given, look for tagarr*.conf in script directory
 if [ -z "$OLD_CONFIG" ]; then
     configs=()
@@ -98,21 +114,6 @@ if [ -z "$OLD_CONFIG" ]; then
         echo "Usage: $0 [--no-update] /path/to/tagarr_config.conf"
         exit 1
     fi
-fi
-
-# --- Self-update: check for newer version of this script ---
-if [ "$NO_UPDATE" = "false" ] && [ "${TAGARR_MIGRATE_NO_UPDATE:-}" != "1" ]; then
-    latest=$(mktemp)
-    if curl -fsSL "$SELF_URL" -o "$latest" 2>/dev/null; then
-        if ! cmp -s "$SCRIPT_PATH" "$latest"; then
-            echo "Updating migration script to latest version..."
-            cp "$latest" "$SCRIPT_PATH"
-            chmod +x "$SCRIPT_PATH"
-            rm -f "$latest"
-            TAGARR_MIGRATE_NO_UPDATE=1 exec "$SCRIPT_PATH" "$@"
-        fi
-    fi
-    rm -f "$latest"
 fi
 
 if [ ! -f "$OLD_CONFIG" ]; then
