@@ -2,11 +2,14 @@
 
 ## v2.3.0 — 2026-04-13
 
-### Added (tagarr_import.sh v1.5.1)
+### Added (tagarr_import.sh v1.5.2)
 
 - **Open Matte token tracking** — Grab rename now detects `Open Matte` in release titles. This TRaSH CF (+25 score) is title-based and lost when torrent names are stripped, causing score drops that block imports.
-- **Configurable Movie Version tokens** — New options `GRAB_RENAME_IMAX` and `GRAB_RENAME_OPEN_MATTE` (both default `true`) let users toggle which Movie Version CFs trigger a rename. More tokens can be added as needed.
-- **Config migration script** — New `tagarr_import_migrate.sh` merges an existing config into the latest `conf.sample` template. Preserves all user values (API keys, release groups, webhooks, filters), adds new settings with safe defaults. Never modifies the original config — writes to `.conf.new` for review.
+- **Configurable Movie Version tokens** — `GRAB_RENAME_IMAX` and `GRAB_RENAME_OPEN_MATTE` (both default `false`) let users toggle which Movie Version CFs trigger a rename. More tokens can be added as needed.
+- **Qui proxy support** — Qui users can use their proxy URL in `QBIT_CLIENTS` instead of direct qBit URLs. No separate backend config needed.
+- **Update check in all scripts** — All scripts check `versions.json` on GitHub at startup. Discord-enabled scripts show update notices in the footer; others log a message. 5s timeout, fail-safe.
+- **Universal config migration** — `tagarr_migrate.sh` replaces `tagarr_import_migrate.sh`. Works with all 7 tagarr configs — detects type from filename, downloads matching sample from GitHub, `--all` flag to migrate everything at once. Self-updates from GitHub.
+- **Config versioning** — All `.conf.sample` files now include `# Config version:` for tracking. Migration script skips if already current.
 
 ### Fixed
 
@@ -15,6 +18,7 @@
 ### Changed
 
 - **Discord notification fields** — "Original Name" → "Torrent Name", "New Name" → "Restored to Release Name" for clearer intent.
+- **IMAX/Open Matte default off** — Both default to `false` in sample config (opt-in, not opt-out).
 
 ## v2.2.0 — 2026-04-12
 
