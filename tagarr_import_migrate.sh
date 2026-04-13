@@ -87,11 +87,27 @@ if [ ! -f "$OLD_CONFIG" ]; then
     exit 1
 fi
 
-# --- Download latest sample from GitHub ---
 echo "Tagarr Import — Config Migration"
 echo "================================="
 echo ""
-echo "Downloading latest config template from GitHub..."
+
+# --- Check local config version before downloading ---
+old_version=$(grep -oP '^# Config version:\s*\K[\d.]+' "$OLD_CONFIG" 2>/dev/null || echo "unknown")
+
+echo "Checking for updates..."
+
+# Download just the header to read the version (fast)
+remote_header=$(curl -fsSL "$SAMPLE_URL" 2>/dev/null | head -5 || true)
+remote_version=$(echo "$remote_header" | grep -oP '^# Config version:\s*\K[\d.]+' || echo "unknown")
+
+if [ "$old_version" = "$remote_version" ] && [ "$old_version" != "unknown" ]; then
+    echo ""
+    echo "Config is already up to date (version $old_version). Nothing to do."
+    exit 0
+fi
+
+# --- Download full sample from GitHub ---
+echo "Downloading latest config template (version $remote_version)..."
 
 SAMPLE_FILE=$(mktemp)
 trap 'rm -f "$SAMPLE_FILE"' EXIT
@@ -113,22 +129,13 @@ fi
 
 BACKUP_FILE="${OLD_CONFIG}.old"
 OUTPUT_FILE="$OLD_CONFIG"
-
-# Read config versions
-old_version=$(grep -oP '^# Config version:\s*\K[\d.]+' "$OLD_CONFIG" 2>/dev/null || echo "unknown")
-new_version=$(grep -oP '^# Config version:\s*\K[\d.]+' "$SAMPLE_FILE" 2>/dev/null || echo "unknown")
+new_version="$remote_version"
 
 echo "Done!"
 echo ""
 echo "Config:  $OLD_CONFIG (version: $old_version)"
 echo "Sample:  version $new_version"
 echo "Backup:  $BACKUP_FILE"
-
-if [ "$old_version" = "$new_version" ] && [ "$old_version" != "unknown" ]; then
-    echo ""
-    echo "Config is already up to date (version $old_version). Nothing to do."
-    exit 0
-fi
 echo ""
 
 # --- Extract RELEASE_GROUPS from old config (full block including comments) ---
