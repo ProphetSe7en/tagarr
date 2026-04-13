@@ -243,7 +243,7 @@ for arr_name in "${!ARRAY_VARS[@]}"; do
         fi
         if [ "$in_block" = "true" ]; then
             block+="${line}"$'\n'
-            if [[ "$line" =~ ^\) ]]; then
+            if [[ "$line" =~ ^[[:space:]]*\) ]]; then
                 in_block=false
             fi
         fi
@@ -261,7 +261,7 @@ while IFS= read -r line; do
         continue
     fi
     if [ "$in_array" = "true" ]; then
-        [[ "$line" =~ ^\) ]] && in_array=false
+        [[ "$line" =~ ^[[:space:]]*\) ]] && in_array=false
         continue
     fi
     # Scalar variable assignment
@@ -273,10 +273,19 @@ done < "$SAMPLE_FILE"
 # --- Read scalar values from old config as raw text ---
 declare -A old_raw_values
 declare -A old_has_var
+_in_old_array=false
 while IFS= read -r line; do
     [[ "$line" =~ ^[[:space:]]*# ]] && continue
     [[ "$line" =~ ^[[:space:]]*$ ]] && continue
-    [[ "$line" =~ [\(\)] ]] && continue
+    # Track array blocks to skip their contents
+    if [[ "$line" =~ ^[[:space:]]*[A-Z_]+=\( ]]; then
+        _in_old_array=true
+        continue
+    fi
+    if [ "$_in_old_array" = "true" ]; then
+        [[ "$line" =~ ^[[:space:]]*\) ]] && _in_old_array=false
+        continue
+    fi
     if [[ "$line" =~ ^[[:space:]]*([A-Z_]+)=(.*) ]]; then
         var_name="${BASH_REMATCH[1]}"
         var_value="${BASH_REMATCH[2]}"
@@ -298,7 +307,7 @@ skip_array=""
 while IFS= read -r line; do
     # Handle array blocks — replace with old values if they exist
     if [ -n "$skip_array" ]; then
-        if [[ "$line" =~ ^\) ]]; then
+        if [[ "$line" =~ ^[[:space:]]*\) ]]; then
             [ -z "${old_arrays[$skip_array]:-}" ] && output+="${line}"$'\n'
             skip_array=""
         else
