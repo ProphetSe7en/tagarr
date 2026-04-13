@@ -172,89 +172,44 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
     log "INFO" "Client:  $GRAB_CLIENT"
     log "INFO" "Hash:    $GRAB_HASH"
 
-    # Resolve backend (qbit or qui) and map download client
+    # Map download client name to qBit URL (case-insensitive match)
+    # Supports direct qBit URLs or Qui proxy URLs
     hash_lower="${GRAB_HASH,,}"
-    _rename_backend="${GRAB_RENAME_BACKEND:-qbit}"
 
-    if [ "$_rename_backend" = "qui" ]; then
-        # --- Qui backend ---
-        if [ -z "${QUI_URL:-}" ] || [ -z "${QUI_API_KEY:-}" ]; then
-            log "WARN" "GRAB_RENAME_BACKEND=qui but QUI_URL or QUI_API_KEY not set — skip"
-            exit 0
-        fi
-        if [ "${#QUI_CLIENTS[@]}" -eq 0 ]; then
-            log "WARN" "QUI_CLIENTS is empty or unset — skip"
-            exit 0
-        fi
-
-        qui_instance=""
-        grab_client_lower="${GRAB_CLIENT,,}"
-        for entry in "${QUI_CLIENTS[@]}"; do
-            client_name="${entry%%:*}"
-            client_id="${entry#*:}"
-            if [ "${client_name,,}" = "$grab_client_lower" ]; then
-                qui_instance="$client_id"
-                break
-            fi
-        done
-
-        if [ -z "$qui_instance" ]; then
-            log "WARN" "Download client '$GRAB_CLIENT' not in QUI_CLIENTS map — skip"
-            exit 0
-        fi
-
-        log "INFO" "Backend: Qui (instance $qui_instance)"
-
-        # Fetch current torrent info from Qui
-        qui_resp=$(curl -sS --max-time 10 \
-            -H "X-Api-Key: ${QUI_API_KEY}" \
-            "${QUI_URL}/api/instances/${qui_instance}/torrents/${hash_lower}/properties" 2>/dev/null)
-
-        if [ -z "$qui_resp" ] || echo "$qui_resp" | jq -e '.error' > /dev/null 2>&1; then
-            log "WARN" "Torrent $hash_lower not found in Qui (yet?) — skip"
-            exit 0
-        fi
-
-        current_name=$(echo "$qui_resp" | jq -r '.name // ""' 2>/dev/null)
-
-    else
-        # --- qBit backend (default) ---
-        if [ "${#QBIT_CLIENTS[@]}" -eq 0 ]; then
-            log "WARN" "QBIT_CLIENTS is empty or unset — skip"
-            exit 0
-        fi
-
-        qbit_url=""
-        grab_client_lower="${GRAB_CLIENT,,}"
-        for entry in "${QBIT_CLIENTS[@]}"; do
-            client_name="${entry%%:*}"
-            client_url="${entry#*:}"
-            if [ "${client_name,,}" = "$grab_client_lower" ]; then
-                qbit_url="$client_url"
-                break
-            fi
-        done
-
-        if [ -z "$qbit_url" ]; then
-            log "WARN" "Download client '$GRAB_CLIENT' not in QBIT_CLIENTS map — skip"
-            exit 0
-        fi
-
-        log "INFO" "Backend: qBit ($qbit_url)"
-
-        # Fetch current torrent info from qBit
-        qbit_info=$(curl -sS --max-time 10 "${qbit_url}/api/v2/torrents/info?hashes=${hash_lower}" 2>/dev/null)
-
-        if [ -z "$qbit_info" ] || [ "$qbit_info" = "[]" ]; then
-            log "WARN" "Torrent $hash_lower not found in qBit (yet?) — skip"
-            exit 0
-        fi
-
-        current_name=$(echo "$qbit_info" | jq -r '.[0].name // ""' 2>/dev/null)
+    if [ "${#QBIT_CLIENTS[@]}" -eq 0 ]; then
+        log "WARN" "QBIT_CLIENTS is empty or unset — skip"
+        exit 0
     fi
 
+    qbit_url=""
+    grab_client_lower="${GRAB_CLIENT,,}"
+    for entry in "${QBIT_CLIENTS[@]}"; do
+        client_name="${entry%%:*}"
+        client_url="${entry#*:}"
+        if [ "${client_name,,}" = "$grab_client_lower" ]; then
+            qbit_url="$client_url"
+            break
+        fi
+    done
+
+    if [ -z "$qbit_url" ]; then
+        log "WARN" "Download client '$GRAB_CLIENT' not in QBIT_CLIENTS map — skip"
+        exit 0
+    fi
+
+    log "INFO" "qBit URL: $qbit_url"
+
+    # Fetch current torrent info from qBit (case-insensitive hash)
+    qbit_info=$(curl -sS --max-time 10 "${qbit_url}/api/v2/torrents/info?hashes=${hash_lower}" 2>/dev/null)
+
+    if [ -z "$qbit_info" ] || [ "$qbit_info" = "[]" ]; then
+        log "WARN" "Torrent $hash_lower not found in qBit (yet?) — skip"
+        exit 0
+    fi
+
+    current_name=$(echo "$qbit_info" | jq -r '.[0].name // ""' 2>/dev/null)
     if [ -z "$current_name" ]; then
-        log "WARN" "Could not parse torrent name — skip"
+        log "WARN" "Could not parse qBit torrent name — skip"
         exit 0
     fi
 
@@ -384,21 +339,12 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
         summary_text="Cosmetic rename — no scoring impact tracked"
     fi
 
-    # Execute rename via configured backend
-    log "INFO" "Renaming torrent to: $GRAB_TITLE"
-
-    if [ "$_rename_backend" = "qui" ]; then
-        rename_response=$(curl -sS --max-time 10 -w "\nHTTP_CODE:%{http_code}" \
-            -X PUT "${QUI_URL}/api/instances/${qui_instance}/torrents/${hash_lower}/rename" \
-            -H "X-Api-Key: ${QUI_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d "$(jq -n --arg name "$GRAB_TITLE" '{name: $name}')" 2>/dev/null)
-    else
-        rename_response=$(curl -sS --max-time 10 -w "\nHTTP_CODE:%{http_code}" \
-            -X POST "${qbit_url}/api/v2/torrents/rename" \
-            --data-urlencode "hash=${hash_lower}" \
-            --data-urlencode "name=${GRAB_TITLE}" 2>/dev/null)
-    fi
+    # Execute rename
+    log "INFO" "Renaming qBit torrent to: $GRAB_TITLE"
+    rename_response=$(curl -sS --max-time 10 -w "\nHTTP_CODE:%{http_code}" \
+        -X POST "${qbit_url}/api/v2/torrents/rename" \
+        --data-urlencode "hash=${hash_lower}" \
+        --data-urlencode "name=${GRAB_TITLE}" 2>/dev/null)
 
     rename_http=$(echo "$rename_response" | grep "HTTP_CODE:" | tail -1 | cut -d: -f2)
 
@@ -480,11 +426,8 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
         # Build fields dynamically — only include what was actually recovered
         fields_json='[]'
 
-        _renamed_via="$GRAB_CLIENT"
-        [ "$_rename_backend" = "qui" ] && _renamed_via="$GRAB_CLIENT (via Qui)"
-
         fields_json=$(echo "$fields_json" | jq \
-            --arg val "$_renamed_via" \
+            --arg val "$GRAB_CLIENT" \
             '. += [{ name: "Renamed in", value: $val, inline: false }]')
 
         if [ "$group_recovered" = "true" ]; then

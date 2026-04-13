@@ -159,31 +159,18 @@ GRAB_RENAME_EXCLUDE_SCENE=false
 GRAB_RENAME_IMAX=false             # IMAX / IMAX Enhanced (TRaSH CF)
 GRAB_RENAME_OPEN_MATTE=false       # Open Matte (TRaSH CF, +25 default)
 
-# Backend for grab rename: "qbit" (direct qBittorrent API) or "qui" (via Qui proxy).
-# Both do the same thing — rename the torrent's display name. Qui is convenient
-# if you already run it, since you don't need direct qBit URLs.
-GRAB_RENAME_BACKEND=qbit
-
-# --- qBit backend (GRAB_RENAME_BACKEND=qbit) ---
 # Map Radarr's "Download Client" name (Settings > Download Clients > Name)
 # to its qBit Web UI URL. The script picks the right qBit instance based
 # on which client Radarr used for the grab. Subnet whitelist or unauthenticated
 # access is required — no credentials are supported in this map.
+#
+# Qui users: use your Qui proxy URL instead of a direct qBit URL.
+# Create a proxy API key in Qui (Settings > Client Proxy API Keys) and use:
+#   "qBit-movies:http://your-host:7476/proxy/YOUR_PROXY_KEY"
 QBIT_CLIENTS=(
     "qBit-movies:http://your-host:8080"
     # "qBit-tv:http://your-host:8081"
 )
-
-# --- Qui backend (GRAB_RENAME_BACKEND=qui) ---
-# Qui URL and API key. Find the API key in Qui's Settings page.
-# QUI_CLIENTS maps download client names to Qui instance IDs.
-# Find instance IDs in Qui under Instances (typically 1=Misc, 2=Movies, 3=TV).
-#QUI_URL="http://your-host:7476"
-#QUI_API_KEY="your-qui-api-key"
-#QUI_CLIENTS=(
-#    "qBit-movies:2"
-#    # "qBit-tv:3"
-#)
 
 # === DISCOVERY ===
 # When the imported movie's release group is not in RELEASE_GROUPS (active
