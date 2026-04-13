@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.3.0 — 2026-04-13
+
+### Added (tagarr_import.sh v1.5.1)
+
+- **Open Matte token tracking** — Grab rename now detects `Open Matte` in release titles. This TRaSH CF (+25 score) is title-based and lost when torrent names are stripped, causing score drops that block imports.
+- **Configurable Movie Version tokens** — New options `GRAB_RENAME_IMAX` and `GRAB_RENAME_OPEN_MATTE` (both default `true`) let users toggle which Movie Version CFs trigger a rename. More tokens can be added as needed.
+- **Config migration script** — New `tagarr_import_migrate.sh` merges an existing config into the latest `conf.sample` template. Preserves all user values (API keys, release groups, webhooks, filters), adds new settings with safe defaults. Never modifies the original config — writes to `.conf.new` for review.
+
+### Fixed
+
+- **Release group false positive on cosmetic spacing** — The release group check now tolerates `- Group` (space after hyphen) and trailing parentheses, preventing unnecessary renames when the group is already present with slightly different formatting.
+
+### Changed
+
+- **Discord notification fields** — "Original Name" → "Torrent Name", "New Name" → "Restored to Release Name" for clearer intent.
+
 ## v2.2.0 — 2026-04-12
 
 ### Added (tagarr_import.sh v1.5.0) [EXPERIMENTAL]

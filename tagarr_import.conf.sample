@@ -149,6 +149,15 @@ ENABLE_GRAB_RENAME=false
 #   but imports at WEB score (lower), triggering re-grab.
 GRAB_RENAME_EXCLUDE_SCENE=false
 
+# Optional Movie Version tokens to track for grab rename.
+# These are Custom Formats that score based on release title text
+# (not file metadata), so the token can be lost if the torrent name
+# is stripped. When enabled, the script checks if the token is present
+# in the grab title but missing from the qBit name, and includes it
+# as a reason to rename. Default: true (enabled).
+GRAB_RENAME_IMAX=true              # IMAX / IMAX Enhanced (TRaSH CF)
+GRAB_RENAME_OPEN_MATTE=true        # Open Matte (TRaSH CF, +25 default)
+
 # Map Radarr's "Download Client" name (Settings > Download Clients > Name)
 # to its qBit Web UI URL. The script picks the right qBit instance based
 # on which client Radarr used for the grab. Subnet whitelist or unauthenticated

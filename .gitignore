@@ -18,6 +18,8 @@ discovery.log
 DESIGN_NOTES.md
 generate_samples.sh
 
+# Episode tagger (lives in qBit appdata, not part of tagarr)
+qbittorrent_auto_tagger.py
+
 # Work copies
 work/
-qbittorrent_auto_tagger.py

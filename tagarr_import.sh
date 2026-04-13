@@ -33,7 +33,7 @@
 # Test with a single movie before enabling as a Radarr Connect handler.
 # -----------------------------------------------------------------------------
 
-SCRIPT_VERSION="1.5.0"
+SCRIPT_VERSION="1.5.1"
 
 ########################################
 # CONFIG LOADING
@@ -245,8 +245,10 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
 
     diff_tokens=()
 
-    # Release group suffix (literal match, regex-safe)
-    if ! echo "$current_name" | grep -qiF -- "-${GRAB_RG}"; then
+    # Release group suffix — flexible match: -GROUP, - GROUP, -GROUP), etc.
+    # Escape group name for regex (groups are typically alphanumeric, but be safe)
+    _grab_rg_esc=$(printf '%s' "$GRAB_RG" | sed 's/[.[\*^$()+?{|\\]/\\&/g')
+    if ! echo "$current_name" | grep -Eqi "[-][ ]?${_grab_rg_esc}([^a-zA-Z0-9]|$)"; then
         diff_tokens+=("-${GRAB_RG} (release group)")
     fi
 
@@ -261,7 +263,10 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
     _added '\bplay(\]?\s*\[?|[._-])web([-.]?dl)?' && { diff_tokens+=("Play WEB-DL"); ma_or_play_added=true; }
     # Standalone WEB-DL only when MA/Play didn't already cover it
     [ "$ma_or_play_added" = "false" ] && _added '\bweb[-.]?dl\b' && diff_tokens+=("WEB-DL")
-    _added '\bimax\b'                              && diff_tokens+=("IMAX")
+    [ "${GRAB_RENAME_IMAX:-true}" = "true" ] && \
+        _added '\bimax\b'                              && diff_tokens+=("IMAX")
+    [ "${GRAB_RENAME_OPEN_MATTE:-true}" = "true" ] && \
+        _added '\bopen[ ._-]?matte\b'                  && diff_tokens+=("Open Matte")
     _added '\btruehd\b'                            && diff_tokens+=("TrueHD")
     _added '\batmos\b'                             && diff_tokens+=("Atmos")
     _added '\bdts[._-]?x\b'                        && diff_tokens+=("DTS-X")
@@ -346,7 +351,7 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
         audio_parts=()
         for t in "${other_tokens[@]}"; do
             case "$t" in
-                "MA WEB-DL"|"Play WEB-DL"|"WEB-DL"|"IMAX")
+                "MA WEB-DL"|"Play WEB-DL"|"WEB-DL"|"IMAX"|"Open Matte")
                     quality_fixed="${quality_fixed:+$quality_fixed, }$t"
                     ;;
                 "TrueHD"|"Atmos"|"DTS-X"|"DTS-HD MA")
@@ -427,8 +432,8 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
             --arg new "$GRAB_TITLE" \
             '. += [
                 { name: "Event", value: $event, inline: true },
-                { name: "Original Name", value: $old, inline: false },
-                { name: "New Name", value: $new, inline: false }
+                { name: "Torrent Name", value: $old, inline: false },
+                { name: "Restored to Release Name", value: $new, inline: false }
             ]')
 
         payload=$(jq -n \
