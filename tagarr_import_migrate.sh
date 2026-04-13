@@ -114,10 +114,21 @@ fi
 BACKUP_FILE="${OLD_CONFIG}.old"
 OUTPUT_FILE="$OLD_CONFIG"
 
+# Read config versions
+old_version=$(grep -oP '^# Config version:\s*\K[\d.]+' "$OLD_CONFIG" 2>/dev/null || echo "unknown")
+new_version=$(grep -oP '^# Config version:\s*\K[\d.]+' "$SAMPLE_FILE" 2>/dev/null || echo "unknown")
+
 echo "Done!"
 echo ""
-echo "Config:  $OLD_CONFIG"
+echo "Config:  $OLD_CONFIG (version: $old_version)"
+echo "Sample:  version $new_version"
 echo "Backup:  $BACKUP_FILE"
+
+if [ "$old_version" = "$new_version" ] && [ "$old_version" != "unknown" ]; then
+    echo ""
+    echo "Config is already up to date (version $old_version). Nothing to do."
+    exit 0
+fi
 echo ""
 
 # --- Extract RELEASE_GROUPS from old config (full block including comments) ---
