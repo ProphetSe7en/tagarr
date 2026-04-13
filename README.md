@@ -67,7 +67,18 @@ cp tagarr.conf.sample tagarr.conf && nano tagarr.conf
 
 **`tagarr_list.sh`** — Tags movies from TMDb or Trakt lists. Useful for curated collections like "Reference Audio", "Oscar Winners", or director filmographies. Define lists in `tagarr_list.conf` with format `"source:list_id:tag_name:display_name"`. Runs on a schedule or manually.
 
-**`tagarr_migrate.sh`** — Migrates any tagarr config to the latest format. Detects which config type from the filename, downloads the matching sample from GitHub, and merges your existing values in. Backs up the original to `.old`. Works with all configs: `tagarr.conf`, `tagarr_import.conf`, `tagarr_recover.conf`, etc. Run after updating to a new version that adds config options.
+**`tagarr_migrate.sh`** — Migrates any tagarr config to the latest format. Downloads the matching sample from GitHub, merges your existing values in, and backs up the original to `.old`. Run after updating to a new version that adds config options. If only one config exists in the directory, it's detected automatically.
+
+```bash
+# Single config in directory — auto-detected
+./tagarr_migrate.sh
+
+# Specify which config to migrate
+./tagarr_migrate.sh tagarr_import.conf
+
+# Migrate all tagarr configs at once
+./tagarr_migrate.sh --all
+```
 
 **`tagarr_remove.sh`** — Bulk-removes one or more tags from all movies in one or both Radarr instances. Useful when you want to clean up old tags or start fresh. Dry-run by default.
 

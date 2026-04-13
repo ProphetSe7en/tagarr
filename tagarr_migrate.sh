@@ -58,13 +58,15 @@ ARGS=()
 for arg in "$@"; do
     case "$arg" in
         --no-update) NO_UPDATE=true ;;
+        --all) RUN_ALL=true ;;
         --help|-h)
-            echo "Usage: $0 [--no-update] /path/to/tagarr_config.conf"
+            echo "Usage: $0 [--all] [--no-update] [/path/to/tagarr_config.conf]"
             echo ""
             echo "Migrates any tagarr config to the latest format."
             echo "The config type is detected from the filename."
             echo ""
             echo "Options:"
+            echo "  --all          Migrate all tagarr configs in the directory"
             echo "  --no-update    Skip automatic self-update from GitHub"
             echo ""
             echo "Supported: tagarr.conf, tagarr_import.conf,"
@@ -76,6 +78,7 @@ for arg in "$@"; do
     esac
 done
 OLD_CONFIG="${ARGS[0]:-}"
+RUN_ALL="${RUN_ALL:-false}"
 
 # --- Self-update: check for newer version of this script ---
 # Runs BEFORE config detection so old scripts get auto-detect on re-exec
@@ -93,6 +96,27 @@ if [ "$NO_UPDATE" = "false" ] && [ "${TAGARR_MIGRATE_NO_UPDATE:-}" != "1" ]; the
     rm -f "$latest"
 fi
 
+# --- Handle --all: migrate every tagarr*.conf in script directory ---
+if [ "$RUN_ALL" = "true" ]; then
+    configs=()
+    for f in "${SCRIPT_DIR}"/tagarr*.conf; do
+        [ -f "$f" ] && configs+=("$f")
+    done
+    if [ ${#configs[@]} -eq 0 ]; then
+        echo "No tagarr configs found in $(basename "$SCRIPT_DIR")."
+        exit 1
+    fi
+    echo "Migrating ${#configs[@]} configs..."
+    echo ""
+    update_flag=""
+    [ "$NO_UPDATE" = "true" ] && update_flag="--no-update"
+    for f in "${configs[@]}"; do
+        TAGARR_MIGRATE_NO_UPDATE=1 "$SCRIPT_PATH" $update_flag "$f"
+        echo ""
+    done
+    exit 0
+fi
+
 # Auto-detect: if no config given, look for tagarr*.conf in script directory
 if [ -z "$OLD_CONFIG" ]; then
     configs=()
@@ -108,10 +132,12 @@ if [ -z "$OLD_CONFIG" ]; then
             echo "  $(basename "$f")"
         done
         echo ""
-        echo "Specify which one: $0 /path/to/config.conf"
+        echo "Specify which one, or use --all to migrate all:"
+        echo "  $0 tagarr_import.conf"
+        echo "  $0 --all"
         exit 1
     else
-        echo "Usage: $0 [--no-update] /path/to/tagarr_config.conf"
+        echo "Usage: $0 [--all] [--no-update] /path/to/tagarr_config.conf"
         exit 1
     fi
 fi
