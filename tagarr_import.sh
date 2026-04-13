@@ -263,9 +263,9 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
     _added '\bplay(\]?\s*\[?|[._-])web([-.]?dl)?' && { diff_tokens+=("Play WEB-DL"); ma_or_play_added=true; }
     # Standalone WEB-DL only when MA/Play didn't already cover it
     [ "$ma_or_play_added" = "false" ] && _added '\bweb[-.]?dl\b' && diff_tokens+=("WEB-DL")
-    [ "${GRAB_RENAME_IMAX:-true}" = "true" ] && \
+    [ "${GRAB_RENAME_IMAX:-false}" = "true" ] && \
         _added '\bimax\b'                              && diff_tokens+=("IMAX")
-    [ "${GRAB_RENAME_OPEN_MATTE:-true}" = "true" ] && \
+    [ "${GRAB_RENAME_OPEN_MATTE:-false}" = "true" ] && \
         _added '\bopen[ ._-]?matte\b'                  && diff_tokens+=("Open Matte")
     _added '\btruehd\b'                            && diff_tokens+=("TrueHD")
     _added '\batmos\b'                             && diff_tokens+=("Atmos")
