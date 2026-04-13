@@ -17,6 +17,10 @@ discovery.log
 # Internal development files
 DESIGN_NOTES.md
 generate_samples.sh
+tagarr_import_migrate.sh
+
+# Test configs
+test/
 
 # Episode tagger (lives in qBit appdata, not part of tagarr)
 qbittorrent_auto_tagger.py
