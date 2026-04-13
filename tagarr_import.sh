@@ -2,7 +2,7 @@
 
 # -----------------------------------------------------------------------------
 # Tagarr Import — Event-Driven Radarr Tagger with Discovery
-# Version: 1.3.1
+# Version: 1.5.1
 #
 # Radarr Connect handler that tags individual movies on import, upgrade, or
 # file delete events. Tags are based on release group, quality source
