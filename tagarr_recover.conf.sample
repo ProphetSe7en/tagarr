@@ -1,4 +1,5 @@
 # ========== CONFIGURATION ==========
+# Config version: 1.0
 # Config for tagarr_recover.sh — Release Group Recovery from Grab History
 #
 # Flags: --app TYPE | --dry-run | --live | --instance TYPE | --movie ID |

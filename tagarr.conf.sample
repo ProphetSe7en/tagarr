@@ -1,4 +1,5 @@
 # ========== CONFIGURATION ==========
+# Config version: 1.0
 # Config for tagarr.sh — Batch Radarr Release Group Tagger
 #
 # Scans all movies and tags by release group with quality/audio filtering.
