@@ -159,6 +159,29 @@ format_duration() {
 }
 
 ########################################
+# UPDATE CHECK
+########################################
+
+UPDATE_AVAILABLE=""
+_check_for_update() {
+    local versions_url="https://raw.githubusercontent.com/ProphetSe7en/tagarr/main/versions.json"
+    local script_name
+    script_name="$(basename "$0")"
+    local remote_json
+    remote_json=$(curl -fsSL --max-time 5 "$versions_url" 2>/dev/null) || return 0
+    local latest
+    latest=$(echo "$remote_json" | jq -r --arg s "$script_name" '.[$s] // ""' 2>/dev/null) || return 0
+    if [ -n "$latest" ] && [ "$latest" != "$SCRIPT_VERSION" ]; then
+        UPDATE_AVAILABLE="$latest"
+        log "Update available: v${latest} (current: v${SCRIPT_VERSION})"
+    fi
+}
+_check_for_update
+
+DISCORD_FOOTER="Tagarr v${SCRIPT_VERSION} by ProphetSe7en"
+[ -n "$UPDATE_AVAILABLE" ] && DISCORD_FOOTER="${DISCORD_FOOTER} • Update available (v${UPDATE_AVAILABLE})"
+
+########################################
 # DISCORD NOTIFICATION FUNCTIONS
 ########################################
 
@@ -178,7 +201,7 @@ send_discord_summary() {
 
   local notif_color=16753920  # Orange (0xFFA500)
   local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
-  local footer_text="Tagarr v${SCRIPT_VERSION} by ProphetSe7en"
+  local footer_text="$DISCORD_FOOTER"
 
   # Build primary field value with actual newline
   local primary_value="Tagged: ${total_primary_tagged}
@@ -426,7 +449,7 @@ send_discord_discovery() {
 
   local notif_color=16766720  # Gold (0xFFD700)
   local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
-  local footer_text="Tagarr v${SCRIPT_VERSION} by ProphetSe7en"
+  local footer_text="$DISCORD_FOOTER"
 
   local payload
   payload=$(jq -n \

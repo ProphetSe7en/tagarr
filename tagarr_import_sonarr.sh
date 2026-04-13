@@ -86,6 +86,29 @@ if [ "${ENABLE_LOGGING:-true}" = "true" ] && [ -n "${LOG_FILE:-}" ] && [ -f "$LO
 fi
 
 ################################################################################
+# UPDATE CHECK
+################################################################################
+
+UPDATE_AVAILABLE=""
+_check_for_update() {
+    local versions_url="https://raw.githubusercontent.com/ProphetSe7en/tagarr/main/versions.json"
+    local script_name
+    script_name="$(basename "$0")"
+    local remote_json
+    remote_json=$(curl -fsSL --max-time 5 "$versions_url" 2>/dev/null) || return 0
+    local latest
+    latest=$(echo "$remote_json" | jq -r --arg s "$script_name" '.[$s] // ""' 2>/dev/null) || return 0
+    if [ -n "$latest" ] && [ "$latest" != "$SCRIPT_VERSION" ]; then
+        UPDATE_AVAILABLE="$latest"
+        log "INFO" "Update available: v${latest} (current: v${SCRIPT_VERSION})"
+    fi
+}
+_check_for_update
+
+DISCORD_FOOTER="Tagarr Import Sonarr v${SCRIPT_VERSION} by ProphetSe7en"
+[ -n "$UPDATE_AVAILABLE" ] && DISCORD_FOOTER="${DISCORD_FOOTER} • Update available (v${UPDATE_AVAILABLE})"
+
+################################################################################
 # HANDLE TEST EVENT (early exit — no API calls needed)
 ################################################################################
 
@@ -99,7 +122,7 @@ if [ "$EVENT_TYPE" = "Test" ]; then
         log "INFO" "Sending Discord test notification..."
         payload=$(jq -n \
             --argjson color 16753920 \
-            --arg footer_text "Tagarr Import Sonarr v${SCRIPT_VERSION} by ProphetSe7en" \
+            --arg footer_text "$DISCORD_FOOTER" \
             --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
             '{
                 embeds: [{
@@ -362,7 +385,7 @@ if [ "${DISCORD_ENABLED:-false}" = "true" ] && [ -n "$RECOVER_RESULT" ]; then
         --argjson color "$notif_color" \
         --arg poster_url "${SERIES_POSTER_URL:-}" \
         --argjson fields "$fields_json" \
-        --arg footer_text "Tagarr Import Sonarr v${SCRIPT_VERSION} by ProphetSe7en" \
+        --arg footer_text "$DISCORD_FOOTER" \
         --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
         '{
             embeds: [{

@@ -1,0 +1,9 @@
+{
+  "tagarr.sh": "1.2.0",
+  "tagarr_import.sh": "1.5.2",
+  "tagarr_import_sonarr.sh": "1.0.0",
+  "tagarr_list.sh": "1.0.0",
+  "tagarr_recover.sh": "2.0.0",
+  "tagarr_remove.sh": "1.0.0",
+  "tagarr_rename.sh": "1.0.0"
+}

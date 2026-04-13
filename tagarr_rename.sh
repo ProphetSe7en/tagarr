@@ -95,6 +95,24 @@ if [ "${ENABLE_LOGGING:-true}" = "true" ] && [ -n "${LOG_FILE:-}" ] && [ -f "$LO
 fi
 
 ########################################
+# UPDATE CHECK
+########################################
+
+_check_for_update() {
+    local versions_url="https://raw.githubusercontent.com/ProphetSe7en/tagarr/main/versions.json"
+    local script_name
+    script_name="$(basename "$0")"
+    local remote_json
+    remote_json=$(curl -fsSL --max-time 5 "$versions_url" 2>/dev/null) || return 0
+    local latest
+    latest=$(echo "$remote_json" | jq -r --arg s "$script_name" '.[$s] // ""' 2>/dev/null) || return 0
+    if [ -n "$latest" ] && [ "$latest" != "$SCRIPT_VERSION" ]; then
+        log "INFO" "Update available: v${latest} (current: v${SCRIPT_VERSION})"
+    fi
+}
+_check_for_update
+
+########################################
 # INSTANCE PROCESSOR
 ########################################
 
