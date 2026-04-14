@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.3.1 — 2026-04-15
+
+### Fixed (tagarr_import.sh v1.5.3)
+
+- **Scene group detector spammed Radarr logs with grep errors on every Grab.** Pattern 2 of `_is_scene` used a regex beginning with `-` (the TRaSH Scene CF anchors release groups as `-CAKES|-GGEZ|...`). Both GNU grep and BusyBox grep parsed the leading `-` as a short option and failed with `invalid option -- '('` — BusyBox then dumped its full help text as stderr, which Radarr captured as Error-level log lines. On a typical install this produced ~54 Error lines per Grab event. Fix: pass `--` before the pattern to stop option parsing. Scene detection pattern 2 also now actually works — it was silently failing, meaning `GRAB_RENAME_EXCLUDE_SCENE` only ever triggered via pattern 1 (resolution + WEB naming).
+
 ## v2.3.0 — 2026-04-13
 
 ### Added (tagarr_import.sh v1.5.2)

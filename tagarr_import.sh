@@ -2,7 +2,7 @@
 
 # -----------------------------------------------------------------------------
 # Tagarr Import — Event-Driven Radarr Tagger with Discovery
-# Version: 1.5.2
+# Version: 1.5.3
 #
 # Radarr Connect handler that tags individual movies on import, upgrade, or
 # file delete events. Tags are based on release group, quality source
@@ -33,7 +33,7 @@
 # Test with a single movie before enabling as a Radarr Connect handler.
 # -----------------------------------------------------------------------------
 
-SCRIPT_VERSION="1.5.2"
+SCRIPT_VERSION="1.5.3"
 
 ########################################
 # CONFIG LOADING
@@ -234,7 +234,10 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
             return 0
         fi
         # Pattern 2: known scene groups (from TRaSH Scene CF)
-        if echo "$name" | grep -Eqi '-(CAKES|GGEZ|GGWP|GLHF|GOSSIP|NAISU|KOGI|PECULATE|SLOT|EDITH|ETHEL|ELEANOR|B2B|SPAMnEGGS|FTP|DiRT|SYNCOPY|BAE|SuccessfulCrab|NHTFS|SURCODE|B0MBARDIERS|D3US|BROTHERHOOD|W4K|STRiKES)\b'; then
+        # NOTE: `--` is required — the pattern starts with `-` which grep
+        # otherwise parses as a short option, printing "invalid option -- '('"
+        # and silently failing the match.
+        if echo "$name" | grep -Eqi -- '-(CAKES|GGEZ|GGWP|GLHF|GOSSIP|NAISU|KOGI|PECULATE|SLOT|EDITH|ETHEL|ELEANOR|B2B|SPAMnEGGS|FTP|DiRT|SYNCOPY|BAE|SuccessfulCrab|NHTFS|SURCODE|B0MBARDIERS|D3US|BROTHERHOOD|W4K|STRiKES)\b'; then
             return 0
         fi
         return 1
