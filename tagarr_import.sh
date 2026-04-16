@@ -2,7 +2,7 @@
 
 # -----------------------------------------------------------------------------
 # Tagarr Import — Event-Driven Radarr Tagger with Discovery
-# Version: 1.5.5
+# Version: 1.5.6
 #
 # Radarr Connect handler that tags individual movies on import, upgrade, or
 # file delete events. Tags are based on release group, quality source
@@ -33,7 +33,7 @@
 # Test with a single movie before enabling as a Radarr Connect handler.
 # -----------------------------------------------------------------------------
 
-SCRIPT_VERSION="1.5.5"
+SCRIPT_VERSION="1.5.6"
 
 ########################################
 # CONFIG LOADING
@@ -304,7 +304,7 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
     # DV/HDR10+ hybrid files where MediaInfo lists Dolby Vision first;
     # rename ensures the filename carries the token for CF matching.
     [ "${GRAB_RENAME_HDR10PLUS:-false}" = "true" ] && \
-        _added 'hdr10[._-]?(plus|\+|p)\b'              && diff_tokens+=("HDR10+")
+        _added 'hdr10[._-]?(plus|\+|p)'                && diff_tokens+=("HDR10+")
 
     # User-defined tokens — format per entry: "label:regex". Bash regex,
     # no lookaheads. Same semantics as the built-ins above: added to

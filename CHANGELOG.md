@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.3.4 — 2026-04-16
+
+### Fixed (tagarr_import.sh v1.5.6)
+
+- **HDR10+ rename regex didn't match `HDR10+` followed by whitespace.** The trailing `\b` word boundary fails when the preceding character (`+`) is non-word and the following character is also non-word (whitespace/dot) — `\b` requires a word/non-word transition. In practice, `HDR10+` followed by ` ` or `.` never triggered a rename, defeating the v1.5.5 feature. Fixed by dropping the trailing `\b` — the required `(plus|\+|p)` group is anchor enough. Verified against Terminator Genisys and Tenet grabs (both `HDR10+` → match) vs Solo, Guardians of the Galaxy, and Mike & Nick (all plain `HDR` → no match). HDR CF (base, +500) is still correctly triggered by Radarr separately via the `\b(HDR)\b` spec — no double-counting, no overlap.
+
 ## v2.3.3 — 2026-04-16
 
 ### Added (tagarr_import.sh v1.5.5)
