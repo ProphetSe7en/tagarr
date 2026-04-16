@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.3.3 — 2026-04-16
+
+### Added (tagarr_import.sh v1.5.5)
+
+- **HDR10+ rename token** — new `GRAB_RENAME_HDR10PLUS` config flag (default `false`). When enabled, the grab rename step triggers a rename if the release title has `HDR10+` / `HDR10Plus` / `HDR10P` but the qBit torrent name does not. Solves the case where Radarr's MediaInfo parser reads `Dolby Vision` first on DV/HDR10+ hybrid files and misses the HDR10+ flag, causing the TRaSH HDR10+ Boost CF (title-based) to not score the import. Renaming ensures the HDR10+ token is present in the filename Radarr uses for CF matching.
+- **Custom user tokens** — new `GRAB_RENAME_CUSTOM_TOKENS` array config. Format per entry: `"Label:regex"`. Script triggers a rename when the grab title matches the regex but the torrent name doesn't — same semantics as the built-in flags (`GRAB_RENAME_IMAX`, `GRAB_RENAME_OPEN_MATTE`, `GRAB_RENAME_HDR10PLUS`). Bash-compatible regex (no lookaheads, no backreferences). Intended as an escape hatch for CF tokens users discover matter for their setup without waiting for a script update. Sample config includes commented examples for Dolby Vision, Remux, and HDR10.
+
+### Changed
+
+- **tagarr_import.conf.sample** — config version 1.3 → 1.4. New fields: `GRAB_RENAME_HDR10PLUS`, `GRAB_RENAME_CUSTOM_TOKENS`.
+
 ## v2.3.2 — 2026-04-16
 
 ### Fixed (tagarr_import.sh v1.5.4)

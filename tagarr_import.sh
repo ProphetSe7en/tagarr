@@ -2,7 +2,7 @@
 
 # -----------------------------------------------------------------------------
 # Tagarr Import — Event-Driven Radarr Tagger with Discovery
-# Version: 1.5.4
+# Version: 1.5.5
 #
 # Radarr Connect handler that tags individual movies on import, upgrade, or
 # file delete events. Tags are based on release group, quality source
@@ -33,7 +33,7 @@
 # Test with a single movie before enabling as a Radarr Connect handler.
 # -----------------------------------------------------------------------------
 
-SCRIPT_VERSION="1.5.4"
+SCRIPT_VERSION="1.5.5"
 
 ########################################
 # CONFIG LOADING
@@ -300,6 +300,21 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
     _added '\batmos\b'                             && diff_tokens+=("Atmos")
     _added '\bdts[._-]?x\b'                        && diff_tokens+=("DTS-X")
     _added '\bdts[._ -]?hd[._ -]?ma\b'             && diff_tokens+=("DTS-HD MA")
+    # HDR10+ — TRaSH HDR10+ Boost CF. Radarr sometimes misses it on
+    # DV/HDR10+ hybrid files where MediaInfo lists Dolby Vision first;
+    # rename ensures the filename carries the token for CF matching.
+    [ "${GRAB_RENAME_HDR10PLUS:-false}" = "true" ] && \
+        _added 'hdr10[._-]?(plus|\+|p)\b'              && diff_tokens+=("HDR10+")
+
+    # User-defined tokens — format per entry: "label:regex". Bash regex,
+    # no lookaheads. Same semantics as the built-ins above: added to
+    # diff_tokens when grab title matches but torrent name doesn't.
+    for _cf_entry in "${GRAB_RENAME_CUSTOM_TOKENS[@]}"; do
+        _cf_label="${_cf_entry%%:*}"
+        _cf_regex="${_cf_entry#*:}"
+        [ -z "$_cf_label" ] || [ -z "$_cf_regex" ] && continue
+        _added "$_cf_regex" && diff_tokens+=("$_cf_label")
+    done
 
     # Build comma-space-separated summary string for the "Tokens added" field
     if [ "${#diff_tokens[@]}" -gt 0 ]; then

@@ -1,5 +1,5 @@
 # ========== CONFIGURATION ==========
-# Config version: 1.3
+# Config version: 1.4
 # Config for tagarr_import.sh — Event-Driven Radarr Tagger with Discovery
 #
 # Radarr Connect handler that tags movies on import, recovers missing
@@ -158,6 +158,19 @@ GRAB_RENAME_EXCLUDE_SCENE=false
 # as a reason to rename. Default: true (enabled).
 GRAB_RENAME_IMAX=false             # IMAX / IMAX Enhanced (TRaSH CF)
 GRAB_RENAME_OPEN_MATTE=false       # Open Matte (TRaSH CF, +25 default)
+GRAB_RENAME_HDR10PLUS=false        # HDR10+ (TRaSH HDR10+ Boost CF — useful for DV/HDR10+ hybrid files where Radarr's MediaInfo parser may miss the HDR10+ flag)
+
+# Custom tokens — user-defined rename triggers in the same spirit as the
+# flags above. Format per entry: "Label:regex". Script triggers a rename
+# when the grab title matches the regex but the qBit torrent name does not.
+# Bash-compatible regex (no lookaheads, no backreferences). The Label is
+# shown in the "Tokens added" log line and Discord field. Uncomment or
+# extend as you discover new CF tokens that matter for your setup.
+GRAB_RENAME_CUSTOM_TOKENS=(
+    # "Dolby Vision:\\b(dolby[._ -]?vision|dv)\\b"
+    # "Remux:\\bremux\\b"
+    # "HDR10:\\bhdr10\\b"
+)
 
 # Map Radarr's "Download Client" name (Settings > Download Clients > Name)
 # to its qBit Web UI URL. The script picks the right qBit instance based
