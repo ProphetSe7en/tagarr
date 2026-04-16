@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.3.5 — 2026-04-16
+
+### Removed (tagarr_import.sh v1.5.7)
+
+- **Reverted `GRAB_RENAME_HDR10PLUS` flag** from v1.5.5/v1.5.6. The feature was based on a wrong diagnosis — verification against real grabs showed Radarr already handles HDR10+ correctly without our intervention. Delta between grab-time and import-time custom format score for HDR10+ releases was only 1 point (not the 100 we expected from a missing HDR10+ Boost CF), because Radarr matches the title-based CF against the filename inside the torrent (which has `HDR10Plus` intact) rather than against the qBit torrent name. Renaming the torrent provided no scoring benefit. Removed the flag to keep the config surface honest.
+- **Documented the design principle** inline in both the script and the sample config: only title-only tokens that cannot be reconstructed from the file itself belong in the rename check. MediaInfo-derived attributes (HDR, HDR10+, DV, codec, audio channels, resolution) are read by Radarr directly from the file on import and never need preservation via torrent rename.
+
+### Kept
+
+- `GRAB_RENAME_CUSTOM_TOKENS` — still useful as an escape hatch for future title-only tokens users identify. Sample examples updated from MediaInfo-adjacent (Dolby Vision, HDR10) to title-only (Remux, PROPER).
+
 ## v2.3.4 — 2026-04-16
 
 ### Fixed (tagarr_import.sh v1.5.6)

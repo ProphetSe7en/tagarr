@@ -158,18 +158,22 @@ GRAB_RENAME_EXCLUDE_SCENE=false
 # as a reason to rename. Default: true (enabled).
 GRAB_RENAME_IMAX=false             # IMAX / IMAX Enhanced (TRaSH CF)
 GRAB_RENAME_OPEN_MATTE=false       # Open Matte (TRaSH CF, +25 default)
-GRAB_RENAME_HDR10PLUS=false        # HDR10+ (TRaSH HDR10+ Boost CF — useful for DV/HDR10+ hybrid files where Radarr's MediaInfo parser may miss the HDR10+ flag)
 
 # Custom tokens — user-defined rename triggers in the same spirit as the
-# flags above. Format per entry: "Label:regex". Script triggers a rename
-# when the grab title matches the regex but the qBit torrent name does not.
-# Bash-compatible regex (no lookaheads, no backreferences). The Label is
-# shown in the "Tokens added" log line and Discord field. Uncomment or
-# extend as you discover new CF tokens that matter for your setup.
+# IMAX / Open Matte flags above. Format per entry: "Label:regex". Script
+# triggers a rename when the grab title matches the regex but the qBit
+# torrent name does not. Bash-compatible regex (no lookaheads, no
+# backreferences).
+#
+# Only add tokens that CANNOT be recovered from the file itself. Radarr
+# reads MediaInfo on every import (HDR format, codec, channels, DV, HDR10+,
+# resolution, bit depth) and matches its own title-regex CFs against the
+# filename — neither path needs our help. The rename is only useful for
+# tokens that exist in the release title but not in the filename/MediaInfo
+# (for example, a release group that the indexer stripped to digits).
 GRAB_RENAME_CUSTOM_TOKENS=(
-    # "Dolby Vision:\\b(dolby[._ -]?vision|dv)\\b"
     # "Remux:\\bremux\\b"
-    # "HDR10:\\bhdr10\\b"
+    # "PROPER:\\bproper\\b"
 )
 
 # Map Radarr's "Download Client" name (Settings > Download Clients > Name)

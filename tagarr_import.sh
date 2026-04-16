@@ -2,7 +2,7 @@
 
 # -----------------------------------------------------------------------------
 # Tagarr Import — Event-Driven Radarr Tagger with Discovery
-# Version: 1.5.6
+# Version: 1.5.7
 #
 # Radarr Connect handler that tags individual movies on import, upgrade, or
 # file delete events. Tags are based on release group, quality source
@@ -33,7 +33,7 @@
 # Test with a single movie before enabling as a Radarr Connect handler.
 # -----------------------------------------------------------------------------
 
-SCRIPT_VERSION="1.5.6"
+SCRIPT_VERSION="1.5.7"
 
 ########################################
 # CONFIG LOADING
@@ -300,11 +300,15 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
     _added '\batmos\b'                             && diff_tokens+=("Atmos")
     _added '\bdts[._-]?x\b'                        && diff_tokens+=("DTS-X")
     _added '\bdts[._ -]?hd[._ -]?ma\b'             && diff_tokens+=("DTS-HD MA")
-    # HDR10+ — TRaSH HDR10+ Boost CF. Radarr sometimes misses it on
-    # DV/HDR10+ hybrid files where MediaInfo lists Dolby Vision first;
-    # rename ensures the filename carries the token for CF matching.
-    [ "${GRAB_RENAME_HDR10PLUS:-false}" = "true" ] && \
-        _added 'hdr10[._-]?(plus|\+|p)'                && diff_tokens+=("HDR10+")
+
+    # Design principle: only tokens that Radarr CANNOT reconstruct from
+    # the file itself belong here. MediaInfo-derived CFs (HDR10/HDR10+/
+    # DV/HLG, audio channels, resolution, codec) are handled by Radarr's
+    # own file analysis — renaming the torrent to preserve those tokens
+    # is pointless because the filename already carries them and Radarr
+    # reads the file directly. Only title-only tokens (release group
+    # stripped to digits, Movie Version like IMAX/Open Matte) are worth
+    # chasing via rename.
 
     # User-defined tokens — format per entry: "label:regex". Bash regex,
     # no lookaheads. Same semantics as the built-ins above: added to
