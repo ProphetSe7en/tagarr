@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.5.5 — 2026-04-17
+
+### Fixed (tagarr_migrate.sh)
+
+- **Duplicated settings in `tagarr_migrate.conf` after v1.0 → v1.1 migration.** The regex that discovers commented-out variable placeholders in the sample (`^[[:space:]]*#?[[:space:]]*([A-Z_]+)=`) used `[[:space:]]*` (zero-or-more) between the `#` and the variable name. This matched documentation **examples** deep inside the sample (e.g. `#        AUTOUPDATE_TAGARR_IMPORT=true` with 8-space indent), treating them as real variable slots. Each example occurrence generated an extra copy of the user's active value in the migrated output. Tightened to `[[:space:]]?` (zero-or-one), so only first-column `#VAR=` and `# VAR=` forms match — not indented examples. Config version bumped to 1.2 to trigger a clean re-migration for users whose v1.1 files have duplicates.
+
 ## v2.5.4 — 2026-04-17
 
 ### Changed (tagarr_migrate.conf.sample)

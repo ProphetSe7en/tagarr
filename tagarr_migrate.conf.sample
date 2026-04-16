@@ -1,5 +1,5 @@
 # ========== CONFIGURATION ==========
-# Config version: 1.1
+# Config version: 1.2
 # Config for tagarr_migrate.sh — opt-in script auto-update + path hints
 #
 # This file controls two closely-related things in tagarr_migrate.sh:

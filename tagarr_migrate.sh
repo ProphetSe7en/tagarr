@@ -479,7 +479,7 @@ while IFS= read -r line; do
     fi
     # Scalar variable assignment — optionally preceded by a #, with optional
     # whitespace between # and the var name.
-    if [[ "$line" =~ ^[[:space:]]*#?[[:space:]]*([A-Z_]+)= ]]; then
+    if [[ "$line" =~ ^[[:space:]]*#?[[:space:]]?([A-Z_]+)= ]]; then
         SCALAR_VARS+=("${BASH_REMATCH[1]}")
     fi
 done < "$SAMPLE_FILE"
@@ -554,7 +554,7 @@ while IFS= read -r line; do
     # line exactly as-is (commented or not).
     matched=false
     for var in "${SCALAR_VARS[@]}"; do
-        if [[ "$line" =~ ^[[:space:]]*#?[[:space:]]*${var}= ]]; then
+        if [[ "$line" =~ ^[[:space:]]*#?[[:space:]]?${var}= ]]; then
             matched=true
             if [ -n "${old_has_var[$var]:-}" ]; then
                 inline_comment=""
