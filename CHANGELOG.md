@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.5.4 — 2026-04-17
+
+### Changed (tagarr_migrate.conf.sample)
+
+- **Config version bumped 1.0 → 1.1** to distribute the expanded documentation that landed in v2.5.0 (four usage scenarios, the "one path per script" mental model, explicit DIR semantics, rollback instructions). Docs were added to the sample without bumping the version, so migrate correctly short-circuited at "already up to date" and never re-wrote the file — users who created their `tagarr_migrate.conf` before v2.5.0 had no way to see the new docs short of re-downloading the sample manually. Bump triggers one-time migration for existing users; the v2.5.1 commented-var logic preserves active `AUTOUPDATE_*=true` and `AUTOUPDATE_*_DIR` values through the rewrite. Previous config content is backed up to `tagarr_migrate.conf.old`.
+
 ## v2.5.3 — 2026-04-17
 
 ### Changed (tagarr_migrate.sh)
