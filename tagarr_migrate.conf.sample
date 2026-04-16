@@ -1,27 +1,104 @@
 # ========== CONFIGURATION ==========
 # Config version: 1.0
-# Config for tagarr_migrate.sh — opt-in script auto-update
+# Config for tagarr_migrate.sh — opt-in script auto-update + path hints
 #
-# This file controls an optional feature of tagarr_migrate.sh: automatic
-# update of tagarr scripts themselves (not just their .conf files).
+# This file controls two closely-related things in tagarr_migrate.sh:
+#   1. Which tagarr scripts should be auto-updated on every migrate run
+#   2. Where those tagarr files (script + matching .conf) live on disk
 #
-# When enabled for a given script, tagarr_migrate.sh will:
-#   1. Read the local SCRIPT_VERSION from the script file
-#   2. Fetch the current version from versions.json on GitHub
-#   3. Only update when the remote version is strictly newer (sort -V)
-#   4. Back up the old script as <script>.old before replacing
-#   5. Preserve +x permissions on the new file
+# ============================================================================
+# Mental model — one path per script, two questions per script
+# ============================================================================
 #
-# Everything below is commented out — the feature is OFF by default.
-# Remove the leading # on an AUTOUPDATE_<SCRIPT>=true line to enable it.
-# Optionally set <SCRIPT>_DIR to a directory path if your copy of that
-# script lives somewhere other than where tagarr_migrate.sh does.
-# Leave <SCRIPT>_DIR blank or remove it to use tagarr_migrate.sh's dir.
+# For each tagarr script, you answer two independent questions:
 #
-# Requirements: curl, jq. Missing dependencies → auto-update is skipped
-# with a warning (config migration still runs).
+#   Q1. "Where does this script's files live on disk?"
+#       → Set AUTOUPDATE_<SCRIPT>_DIR="/path/to/dir"
+#       → Or leave blank/removed = same directory as tagarr_migrate.sh
+#       → People usually keep script + config together, so this directory
+#         is where BOTH the .sh and its matching .conf are expected to be.
+#
+#   Q2. "Should I auto-update this script when migrate runs?"
+#       → AUTOUPDATE_<SCRIPT>=true to enable
+#       → Commented out (default) = never auto-updated; still reports its
+#         own version status in its own logs when it runs.
+#
+# These are separate decisions. You can tell migrate where a script lives
+# (so it can migrate the matching config there) without enabling auto-
+# update for that script.
+#
+# ============================================================================
+# Examples
+# ============================================================================
+#
+#   A) Everything lives next to tagarr_migrate.sh, enable auto-update
+#      for tagarr_import.sh only:
+#
+#        AUTOUPDATE_TAGARR_IMPORT=true
+#
+#   B) tagarr_import.sh + tagarr_import.conf live in /appdata/radarr/scripts,
+#      and you want both the script auto-updated AND its config migrated
+#      from that directory:
+#
+#        AUTOUPDATE_TAGARR_IMPORT=true
+#        AUTOUPDATE_TAGARR_IMPORT_DIR="/appdata/radarr/scripts"
+#
+#   C) tagarr_recover.sh is in /opt/scripts alongside its config. You
+#      want the config migrated but do NOT want the script auto-updated:
+#
+#        #AUTOUPDATE_TAGARR_RECOVER=true           ← stays commented
+#        AUTOUPDATE_TAGARR_RECOVER_DIR="/opt/scripts"  ← DIR set alone
+#
+#   D) Leave a script fully untouched by migrate:
+#
+#        (both lines commented — default state)
+#
+# ============================================================================
+# What happens when tagarr_migrate.sh runs
+# ============================================================================
+#
+#   Script auto-update (per script):
+#     If AUTOUPDATE_<SCRIPT>=true, the script is checked against
+#     versions.json on GitHub and replaced if the remote is strictly
+#     newer (sort -V gate — we never "update" to an older version).
+#     Old file backed up as <script>.old in the same directory. File
+#     permissions and ownership are preserved.
+#
+#   Config migration (per .conf file):
+#     All directories mentioned in this file's AUTOUPDATE_<SCRIPT>_DIR
+#     settings — plus the directory tagarr_migrate.sh itself is in —
+#     are scanned for tagarr_*.conf files. Every matching config found
+#     is migrated: new fields from the latest sample are added with
+#     defaults, your existing values are preserved, and the old config
+#     is backed up as <config>.old.
+#
+#     This means: if you point AUTOUPDATE_TAGARR_IMPORT_DIR at
+#     /appdata/radarr/scripts, migrate will also migrate the
+#     tagarr_import.conf that sits in that same directory — no need
+#     to invoke migrate separately against that file.
+#
+#   No tagarr_migrate.conf / all settings commented:
+#     No script is auto-updated. Config migration runs as normal,
+#     scanning only the directory tagarr_migrate.sh is in (legacy
+#     behavior). This file being absent or unconfigured is the same
+#     as "opt out of all new features."
+#
+# ============================================================================
+# Requirements and fallback
+# ============================================================================
+#
+# Requires curl + jq. If either is missing, auto-update is skipped
+# with one warning line and config migration continues normally —
+# no hard failure.
+#
+# Rollback after an auto-update:
+#   mv <script>.old <script>
+# The backup lives next to the script it replaced (in that script's
+# AUTOUPDATE_<SCRIPT>_DIR if set, otherwise next to tagarr_migrate.sh).
 
-# ---------- AUTO-UPDATE ----------
+# ============================================================================
+# SETTINGS — per-script enable + path
+# ============================================================================
 
 # tagarr.sh — batch Radarr release-group tagger
 #AUTOUPDATE_TAGARR=true

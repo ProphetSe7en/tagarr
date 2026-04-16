@@ -60,19 +60,26 @@ for arg in "$@"; do
         --no-update) NO_UPDATE=true ;;
         --all) RUN_ALL=true ;;
         --help|-h)
-            echo "Usage: $0 [--all] [--no-update] [/path/to/tagarr_config.conf]"
+            echo "Usage: $0 [--no-update] [/path/to/tagarr_config.conf]"
             echo ""
-            echo "Migrates any tagarr config to the latest format."
-            echo "The config type is detected from the filename."
+            echo "Migrates tagarr configs to the latest format. Optionally"
+            echo "auto-updates tagarr scripts when enabled in tagarr_migrate.conf."
+            echo ""
+            echo "With no arguments, migrates every tagarr config found in:"
+            echo "  - the same directory as tagarr_migrate.sh, AND"
+            echo "  - every AUTOUPDATE_<SCRIPT>_DIR set in tagarr_migrate.conf"
             echo ""
             echo "Options:"
-            echo "  --all          Migrate all tagarr configs in the directory"
-            echo "  --no-update    Skip automatic self-update from GitHub"
+            echo "  --no-update    Skip self-update of this migration script"
+            echo "  --all          No-op alias (kept for compatibility)"
             echo ""
-            echo "Supported: tagarr.conf, tagarr_import.conf,"
+            echo "Supported configs: tagarr.conf, tagarr_import.conf,"
             echo "  tagarr_import_sonarr.conf, tagarr_recover.conf,"
             echo "  tagarr_remove.conf, tagarr_rename.conf, tagarr_list.conf,"
-            echo "  tagarr_migrate.conf (opt-in script auto-update)"
+            echo "  tagarr_migrate.conf"
+            echo ""
+            echo "To enable opt-in script auto-update, see:"
+            echo "  https://raw.githubusercontent.com/ProphetSe7en/tagarr/main/tagarr_migrate.conf.sample"
             exit 0
             ;;
         *) ARGS+=("$arg") ;;
@@ -97,20 +104,52 @@ if [ "$NO_UPDATE" = "false" ] && [ "${TAGARR_MIGRATE_NO_UPDATE:-}" != "1" ]; the
     rm -f "$latest"
 fi
 
+# --- Shared: read tagarr_migrate.conf once into global scope. ---
+# Variables like AUTOUPDATE_TAGARR_IMPORT / AUTOUPDATE_TAGARR_IMPORT_DIR
+# become available to both auto_update_scripts and the config-scan logic.
+MIGRATE_CONF="${SCRIPT_DIR}/tagarr_migrate.conf"
+if [ -f "$MIGRATE_CONF" ]; then
+    # shellcheck disable=SC1090
+    source "$MIGRATE_CONF"
+fi
+
+# --- Shared: script → (flag_var, dir_var) mapping. Format: "<sh>|<flag>|<dir>" ---
+SCRIPT_ENTRIES=(
+    "tagarr.sh|AUTOUPDATE_TAGARR|AUTOUPDATE_TAGARR_DIR"
+    "tagarr_import.sh|AUTOUPDATE_TAGARR_IMPORT|AUTOUPDATE_TAGARR_IMPORT_DIR"
+    "tagarr_import_sonarr.sh|AUTOUPDATE_TAGARR_IMPORT_SONARR|AUTOUPDATE_TAGARR_IMPORT_SONARR_DIR"
+    "tagarr_list.sh|AUTOUPDATE_TAGARR_LIST|AUTOUPDATE_TAGARR_LIST_DIR"
+    "tagarr_recover.sh|AUTOUPDATE_TAGARR_RECOVER|AUTOUPDATE_TAGARR_RECOVER_DIR"
+    "tagarr_remove.sh|AUTOUPDATE_TAGARR_REMOVE|AUTOUPDATE_TAGARR_REMOVE_DIR"
+    "tagarr_rename.sh|AUTOUPDATE_TAGARR_RENAME|AUTOUPDATE_TAGARR_RENAME_DIR"
+)
+
+# --- Shared: the only config filenames we recognize as tagarr configs. ---
+# MUST stay in sync with the validator `case` block further down. Keeps
+# the --all scan from accidentally picking up unrelated files that happen
+# to match `tagarr*.conf` (e.g. a user's own tagarr_custom.conf) and
+# failing the recursive migration call on the validator.
+VALID_TAGARR_CONFS=(
+    tagarr.conf
+    tagarr_import.conf
+    tagarr_import_sonarr.conf
+    tagarr_recover.conf
+    tagarr_remove.conf
+    tagarr_rename.conf
+    tagarr_list.conf
+    tagarr_migrate.conf
+)
+
 # --- Auto-update tagarr scripts (opt-in via tagarr_migrate.conf) ---
 # Reads AUTOUPDATE_<SCRIPT>=true flags; only runs when config exists.
 # Guarded against --all recursion via TAGARR_MIGRATE_SKIP_AUTO_UPDATE.
 auto_update_scripts() {
-    local migrate_conf="${SCRIPT_DIR}/tagarr_migrate.conf"
-    [ -f "$migrate_conf" ] || return 0
+    [ -f "$MIGRATE_CONF" ] || return 0
 
     if ! command -v jq >/dev/null 2>&1; then
         echo "WARN: auto-update skipped — jq is required but not installed"
         return 0
     fi
-
-    # shellcheck disable=SC1090
-    source "$migrate_conf"
 
     local versions_url="${GITHUB_BASE}/versions.json"
     local remote_manifest
@@ -122,20 +161,9 @@ auto_update_scripts() {
     local -a updated=() skipped=() failed=()
     local any_enabled=false
 
-    # Each entry: "<script>|<flag_var>|<dir_var>"
-    local entries=(
-        "tagarr.sh|AUTOUPDATE_TAGARR|AUTOUPDATE_TAGARR_DIR"
-        "tagarr_import.sh|AUTOUPDATE_TAGARR_IMPORT|AUTOUPDATE_TAGARR_IMPORT_DIR"
-        "tagarr_import_sonarr.sh|AUTOUPDATE_TAGARR_IMPORT_SONARR|AUTOUPDATE_TAGARR_IMPORT_SONARR_DIR"
-        "tagarr_list.sh|AUTOUPDATE_TAGARR_LIST|AUTOUPDATE_TAGARR_LIST_DIR"
-        "tagarr_recover.sh|AUTOUPDATE_TAGARR_RECOVER|AUTOUPDATE_TAGARR_RECOVER_DIR"
-        "tagarr_remove.sh|AUTOUPDATE_TAGARR_REMOVE|AUTOUPDATE_TAGARR_REMOVE_DIR"
-        "tagarr_rename.sh|AUTOUPDATE_TAGARR_RENAME|AUTOUPDATE_TAGARR_RENAME_DIR"
-    )
-
     local entry script flag_var dir_var enabled target_dir script_path
     local local_version remote_version tmp
-    for entry in "${entries[@]}"; do
+    for entry in "${SCRIPT_ENTRIES[@]}"; do
         IFS='|' read -r script flag_var dir_var <<<"$entry"
 
         enabled="${!flag_var:-false}"
@@ -224,17 +252,51 @@ if [ "${TAGARR_MIGRATE_SKIP_AUTO_UPDATE:-}" != "1" ]; then
     fi
 fi
 
-# --- Handle --all: migrate every tagarr*.conf in script directory ---
+# --- No config specified → default to "migrate everything found" ---
+# Equivalent to the old --all flag. Scans SCRIPT_DIR plus every
+# AUTOUPDATE_<SCRIPT>_DIR set in tagarr_migrate.conf, regardless of
+# whether the corresponding AUTOUPDATE flag is true. A user who points
+# a script to a custom dir usually keeps its config alongside it, so
+# that dir is always a migration target.
+if [ -z "$OLD_CONFIG" ] && [ "$RUN_ALL" != "true" ]; then
+    RUN_ALL=true
+fi
+
 if [ "$RUN_ALL" = "true" ]; then
-    configs=()
-    for f in "${SCRIPT_DIR}"/tagarr*.conf; do
-        [ -f "$f" ] && configs+=("$f")
+    # Collect dirs to scan: SCRIPT_DIR + every AUTOUPDATE_*_DIR set
+    scan_dirs=("$SCRIPT_DIR")
+    for entry in "${SCRIPT_ENTRIES[@]}"; do
+        IFS='|' read -r _sn _fl dir_var <<<"$entry"
+        val="${!dir_var:-}"
+        if [ -n "$val" ] && [ -d "$val" ]; then
+            already_in=false
+            for d in "${scan_dirs[@]}"; do
+                [ "$d" = "$val" ] && already_in=true && break
+            done
+            [ "$already_in" = "false" ] && scan_dirs+=("$val")
+        fi
     done
+
+    # Only pick up files whose basenames match the VALID_TAGARR_CONFS list.
+    # Avoids --all choking if a user has unrelated `tagarr*.conf` files.
+    configs=()
+    for dir in "${scan_dirs[@]}"; do
+        for name in "${VALID_TAGARR_CONFS[@]}"; do
+            [ -f "$dir/$name" ] && configs+=("$dir/$name")
+        done
+    done
+
     if [ ${#configs[@]} -eq 0 ]; then
-        echo "No tagarr configs found in $(basename "$SCRIPT_DIR")."
+        echo "No tagarr configs found in:"
+        for dir in "${scan_dirs[@]}"; do echo "  $dir"; done
         exit 1
     fi
-    echo "Migrating ${#configs[@]} configs..."
+
+    if [ ${#scan_dirs[@]} -gt 1 ]; then
+        echo "Scanning ${#scan_dirs[@]} directories, found ${#configs[@]} configs..."
+    else
+        echo "Migrating ${#configs[@]} configs..."
+    fi
     echo ""
     update_flag=""
     [ "$NO_UPDATE" = "true" ] && update_flag="--no-update"
@@ -243,31 +305,6 @@ if [ "$RUN_ALL" = "true" ]; then
         echo ""
     done
     exit 0
-fi
-
-# Auto-detect: if no config given, look for tagarr*.conf in script directory
-if [ -z "$OLD_CONFIG" ]; then
-    configs=()
-    for f in "${SCRIPT_DIR}"/tagarr*.conf; do
-        [ -f "$f" ] && configs+=("$f")
-    done
-    if [ ${#configs[@]} -eq 1 ]; then
-        OLD_CONFIG="${configs[0]}"
-        echo "Auto-detected: $(basename "$OLD_CONFIG")"
-    elif [ ${#configs[@]} -gt 1 ]; then
-        echo "Multiple configs found in $(basename "$SCRIPT_DIR"):"
-        for f in "${configs[@]}"; do
-            echo "  $(basename "$f")"
-        done
-        echo ""
-        echo "Specify which one, or use --all to migrate all:"
-        echo "  $0 tagarr_import.conf"
-        echo "  $0 --all"
-        exit 1
-    else
-        echo "Usage: $0 [--all] [--no-update] /path/to/tagarr_config.conf"
-        exit 1
-    fi
 fi
 
 if [ ! -f "$OLD_CONFIG" ]; then

@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.5.0 — 2026-04-16
+
+### Changed (tagarr_migrate.sh)
+
+- **`AUTOUPDATE_<SCRIPT>_DIR` now drives config migration too.** Until v2.4.x, the per-script DIR override in `tagarr_migrate.conf` only told migrate where to find the `.sh` file for auto-update. Config migration still scanned only the directory `tagarr_migrate.sh` itself lives in. This was asymmetric — users who point a script to a custom directory (e.g. `/appdata/radarr/scripts/`) usually keep its matching `.conf` there too, and the old behavior ignored that config. Now, any `AUTOUPDATE_<SCRIPT>_DIR` that's set in `tagarr_migrate.conf` is ALSO scanned for `tagarr_*.conf` files during config migration, regardless of whether the corresponding `AUTOUPDATE_<SCRIPT>=true` flag is enabled. One path per script → migrate handles both the script and the config living there.
+
+- **`./tagarr_migrate.sh` (no arguments) now defaults to "migrate everything found".** Previous behavior was to auto-detect a single config, or error out with "Multiple configs found, specify which" when two or more were present. Now a no-args invocation scans `SCRIPT_DIR` + every `AUTOUPDATE_<SCRIPT>_DIR` set in `tagarr_migrate.conf`, migrates every `tagarr_*.conf` file it finds, and optionally auto-updates any scripts flagged `AUTOUPDATE_<SCRIPT>=true`. `--all` is kept as a no-op alias for users who typed it out of habit. Single-config targeting (`./tagarr_migrate.sh tagarr_import.conf`) still works for narrow-focus runs.
+
+### Added
+
+- **Expanded `tagarr_migrate.conf.sample` documentation.** Inline comments now explain the "one path per script, two independent questions" model (where does it live / should it be auto-updated), list four concrete usage scenarios (same-dir + enable, custom-dir + enable, custom-dir without auto-update, fully untouched), and explicitly document that a set DIR drives both the script-update lookup AND the config-migration scan. File itself unchanged — existing configs work without modification.
+
 ## v2.4.2 — 2026-04-16
 
 ### Fixed (tagarr_migrate.sh)
