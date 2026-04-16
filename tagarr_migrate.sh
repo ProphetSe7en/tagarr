@@ -91,18 +91,6 @@ if [ "$NO_UPDATE" = "false" ] && [ "${TAGARR_MIGRATE_NO_UPDATE:-}" != "1" ]; the
             cp "$latest" "$SCRIPT_PATH"
             chmod +x "$SCRIPT_PATH"
             rm -f "$latest"
-            # Discovery hint — only when user hasn't created tagarr_migrate.conf yet.
-            # Skipped once they've opted in (or deliberately ignored by leaving a
-            # fully-commented copy in place).
-            if [ ! -f "${SCRIPT_DIR}/tagarr_migrate.conf" ]; then
-                echo ""
-                echo "Tip: opt-in auto-update of tagarr scripts is available."
-                echo "Enable by fetching the sample config:"
-                echo "  curl -O https://raw.githubusercontent.com/ProphetSe7en/tagarr/main/tagarr_migrate.conf.sample"
-                echo "  cp tagarr_migrate.conf.sample tagarr_migrate.conf"
-                echo "Then edit to uncomment scripts you want auto-updated."
-                echo ""
-            fi
             TAGARR_MIGRATE_NO_UPDATE=1 exec "$SCRIPT_PATH" "$@"
         fi
     fi
@@ -225,6 +213,15 @@ auto_update_scripts() {
 
 if [ "${TAGARR_MIGRATE_SKIP_AUTO_UPDATE:-}" != "1" ]; then
     auto_update_scripts
+    # Discovery notice for the opt-in auto-update feature. Shown once per
+    # invocation when tagarr_migrate.conf does not exist. Silent once the
+    # user has opted in (or deliberately ignored by keeping a commented
+    # copy in place). Guarded from --all recursion by the outer check.
+    if [ ! -f "${SCRIPT_DIR}/tagarr_migrate.conf" ]; then
+        echo "Tip: opt-in auto-update of tagarr scripts is available."
+        echo "See: https://raw.githubusercontent.com/ProphetSe7en/tagarr/main/tagarr_migrate.conf.sample"
+        echo ""
+    fi
 fi
 
 # --- Handle --all: migrate every tagarr*.conf in script directory ---

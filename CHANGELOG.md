@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.4.2 — 2026-04-16
+
+### Fixed (tagarr_migrate.sh)
+
+- **Discovery notice now actually fires on the current upgrade wave.** The v2.4.1 notice was placed inside the self-update `if` block, meaning only the *local* version's code could print it — and older versions don't have that code. Result: users upgrading from v2.3.x or v2.4.0 to v2.4.1 never saw the tip, because v2.4.1's notice code only runs when v2.4.1+ does a future self-update. Moved the notice out of the self-update block into a standalone check that runs once per invocation, after the (silent-by-default) auto-update step. Now fires for *every* upgrade path on the first post-upgrade run, and stays silent on all subsequent runs once the user creates `tagarr_migrate.conf`. Still `--all`-recursion-guarded, so it shows once, not seven times.
+
 ## v2.4.1 — 2026-04-16
 
 ### Fixed (tagarr_migrate.sh)
