@@ -1,0 +1,52 @@
+# ========== CONFIGURATION ==========
+# Config version: 1.0
+# Config for tagarr_migrate.sh — opt-in script auto-update
+#
+# This file controls an optional feature of tagarr_migrate.sh: automatic
+# update of tagarr scripts themselves (not just their .conf files).
+#
+# When enabled for a given script, tagarr_migrate.sh will:
+#   1. Read the local SCRIPT_VERSION from the script file
+#   2. Fetch the current version from versions.json on GitHub
+#   3. Only update when the remote version is strictly newer (sort -V)
+#   4. Back up the old script as <script>.old before replacing
+#   5. Preserve +x permissions on the new file
+#
+# Everything below is commented out — the feature is OFF by default.
+# Remove the leading # on an AUTOUPDATE_<SCRIPT>=true line to enable it.
+# Optionally set <SCRIPT>_DIR to a directory path if your copy of that
+# script lives somewhere other than where tagarr_migrate.sh does.
+# Leave <SCRIPT>_DIR blank or remove it to use tagarr_migrate.sh's dir.
+#
+# Requirements: curl, jq. Missing dependencies → auto-update is skipped
+# with a warning (config migration still runs).
+
+# ---------- AUTO-UPDATE ----------
+
+# tagarr.sh — batch Radarr release-group tagger
+#AUTOUPDATE_TAGARR=true
+#AUTOUPDATE_TAGARR_DIR=""
+
+# tagarr_import.sh — Radarr Connect import-time tagger (most-used)
+#AUTOUPDATE_TAGARR_IMPORT=true
+#AUTOUPDATE_TAGARR_IMPORT_DIR=""
+
+# tagarr_import_sonarr.sh — Sonarr Connect import-time tagger
+#AUTOUPDATE_TAGARR_IMPORT_SONARR=true
+#AUTOUPDATE_TAGARR_IMPORT_SONARR_DIR=""
+
+# tagarr_list.sh — list movies by tag / release group
+#AUTOUPDATE_TAGARR_LIST=true
+#AUTOUPDATE_TAGARR_LIST_DIR=""
+
+# tagarr_recover.sh — recover releaseGroup metadata from grab history
+#AUTOUPDATE_TAGARR_RECOVER=true
+#AUTOUPDATE_TAGARR_RECOVER_DIR=""
+
+# tagarr_remove.sh — remove tagarr-added tags
+#AUTOUPDATE_TAGARR_REMOVE=true
+#AUTOUPDATE_TAGARR_REMOVE_DIR=""
+
+# tagarr_rename.sh — rename release groups across the library
+#AUTOUPDATE_TAGARR_RENAME=true
+#AUTOUPDATE_TAGARR_RENAME_DIR=""

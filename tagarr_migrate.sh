@@ -71,7 +71,8 @@ for arg in "$@"; do
             echo ""
             echo "Supported: tagarr.conf, tagarr_import.conf,"
             echo "  tagarr_import_sonarr.conf, tagarr_recover.conf,"
-            echo "  tagarr_remove.conf, tagarr_rename.conf, tagarr_list.conf"
+            echo "  tagarr_remove.conf, tagarr_rename.conf, tagarr_list.conf,"
+            echo "  tagarr_migrate.conf (opt-in script auto-update)"
             exit 0
             ;;
         *) ARGS+=("$arg") ;;
@@ -96,6 +97,124 @@ if [ "$NO_UPDATE" = "false" ] && [ "${TAGARR_MIGRATE_NO_UPDATE:-}" != "1" ]; the
     rm -f "$latest"
 fi
 
+# --- Auto-update tagarr scripts (opt-in via tagarr_migrate.conf) ---
+# Reads AUTOUPDATE_<SCRIPT>=true flags; only runs when config exists.
+# Guarded against --all recursion via TAGARR_MIGRATE_SKIP_AUTO_UPDATE.
+auto_update_scripts() {
+    local migrate_conf="${SCRIPT_DIR}/tagarr_migrate.conf"
+    [ -f "$migrate_conf" ] || return 0
+
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "WARN: auto-update skipped — jq is required but not installed"
+        return 0
+    fi
+
+    # shellcheck disable=SC1090
+    source "$migrate_conf"
+
+    local versions_url="${GITHUB_BASE}/versions.json"
+    local remote_manifest
+    remote_manifest=$(curl -fsSL --max-time 5 "$versions_url" 2>/dev/null) || {
+        echo "WARN: auto-update skipped — failed to fetch versions.json"
+        return 0
+    }
+
+    local -a updated=() skipped=() failed=()
+    local any_enabled=false
+
+    # Each entry: "<script>|<flag_var>|<dir_var>"
+    local entries=(
+        "tagarr.sh|AUTOUPDATE_TAGARR|AUTOUPDATE_TAGARR_DIR"
+        "tagarr_import.sh|AUTOUPDATE_TAGARR_IMPORT|AUTOUPDATE_TAGARR_IMPORT_DIR"
+        "tagarr_import_sonarr.sh|AUTOUPDATE_TAGARR_IMPORT_SONARR|AUTOUPDATE_TAGARR_IMPORT_SONARR_DIR"
+        "tagarr_list.sh|AUTOUPDATE_TAGARR_LIST|AUTOUPDATE_TAGARR_LIST_DIR"
+        "tagarr_recover.sh|AUTOUPDATE_TAGARR_RECOVER|AUTOUPDATE_TAGARR_RECOVER_DIR"
+        "tagarr_remove.sh|AUTOUPDATE_TAGARR_REMOVE|AUTOUPDATE_TAGARR_REMOVE_DIR"
+        "tagarr_rename.sh|AUTOUPDATE_TAGARR_RENAME|AUTOUPDATE_TAGARR_RENAME_DIR"
+    )
+
+    local entry script flag_var dir_var enabled target_dir script_path
+    local local_version remote_version tmp
+    for entry in "${entries[@]}"; do
+        IFS='|' read -r script flag_var dir_var <<<"$entry"
+
+        enabled="${!flag_var:-false}"
+        [ "$enabled" = "true" ] || continue
+        any_enabled=true
+
+        target_dir="${!dir_var:-}"
+        [ -z "$target_dir" ] && target_dir="$SCRIPT_DIR"
+
+        script_path="${target_dir}/${script}"
+        if [ ! -f "$script_path" ]; then
+            skipped+=("$script (not found at $target_dir)")
+            continue
+        fi
+
+        local_version=$(grep -E '^SCRIPT_VERSION=' "$script_path" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+        remote_version=$(echo "$remote_manifest" | jq -r --arg s "$script" '.[$s] // ""')
+
+        if [ -z "$remote_version" ]; then
+            skipped+=("$script (not listed in versions.json)")
+            continue
+        fi
+
+        if [ "$local_version" = "$remote_version" ]; then
+            skipped+=("$script (v$local_version — already current)")
+            continue
+        fi
+
+        # Only update when remote is strictly newer (sort -V version sort)
+        if [ "$(printf '%s\n%s\n' "$remote_version" "$local_version" | sort -V 2>/dev/null | tail -1)" != "$remote_version" ]; then
+            skipped+=("$script (local v$local_version ahead of remote v$remote_version)")
+            continue
+        fi
+
+        echo "Updating $script: v$local_version -> v$remote_version ($target_dir)"
+        tmp=$(mktemp)
+        if ! curl -fsSL "${GITHUB_BASE}/${script}" -o "$tmp" 2>/dev/null; then
+            failed+=("$script (download failed)")
+            rm -f "$tmp"
+            continue
+        fi
+        # Sanity: downloaded file must be a script
+        if ! head -1 "$tmp" | grep -q '^#!'; then
+            failed+=("$script (downloaded file not a script)")
+            rm -f "$tmp"
+            continue
+        fi
+
+        cp "$script_path" "${script_path}.old"
+        # Overwrite in place to preserve existing permissions/ownership
+        cat "$tmp" > "$script_path"
+        rm -f "$tmp"
+        updated+=("$script: v$local_version -> v$remote_version")
+    done
+
+    [ "$any_enabled" = "false" ] && return 0
+
+    echo ""
+    echo "Script auto-update summary:"
+    if [ ${#updated[@]} -gt 0 ]; then
+        echo "  Updated (${#updated[@]}):"
+        for x in "${updated[@]}"; do echo "    - $x"; done
+        echo "  Previous versions backed up with .old suffix."
+    fi
+    if [ ${#skipped[@]} -gt 0 ]; then
+        echo "  Skipped (${#skipped[@]}):"
+        for x in "${skipped[@]}"; do echo "    - $x"; done
+    fi
+    if [ ${#failed[@]} -gt 0 ]; then
+        echo "  Failed (${#failed[@]}):"
+        for x in "${failed[@]}"; do echo "    - $x"; done
+    fi
+    echo ""
+}
+
+if [ "${TAGARR_MIGRATE_SKIP_AUTO_UPDATE:-}" != "1" ]; then
+    auto_update_scripts
+fi
+
 # --- Handle --all: migrate every tagarr*.conf in script directory ---
 if [ "$RUN_ALL" = "true" ]; then
     configs=()
@@ -111,7 +230,7 @@ if [ "$RUN_ALL" = "true" ]; then
     update_flag=""
     [ "$NO_UPDATE" = "true" ] && update_flag="--no-update"
     for f in "${configs[@]}"; do
-        TAGARR_MIGRATE_NO_UPDATE=1 "$SCRIPT_PATH" $update_flag "$f"
+        TAGARR_MIGRATE_NO_UPDATE=1 TAGARR_MIGRATE_SKIP_AUTO_UPDATE=1 "$SCRIPT_PATH" $update_flag "$f"
         echo ""
     done
     exit 0
@@ -157,14 +276,15 @@ sample_name="${config_basename%.conf}.conf.sample"
 case "$config_basename" in
     tagarr.conf|tagarr_import.conf|tagarr_import_sonarr.conf|\
     tagarr_recover.conf|tagarr_remove.conf|tagarr_rename.conf|\
-    tagarr_list.conf)
+    tagarr_list.conf|tagarr_migrate.conf)
         ;;
     *)
         echo "ERROR: Unrecognized config file: $config_basename"
         echo ""
         echo "Supported: tagarr.conf, tagarr_import.conf,"
         echo "  tagarr_import_sonarr.conf, tagarr_recover.conf,"
-        echo "  tagarr_remove.conf, tagarr_rename.conf, tagarr_list.conf"
+        echo "  tagarr_remove.conf, tagarr_rename.conf, tagarr_list.conf,"
+        echo "  tagarr_migrate.conf"
         exit 1
         ;;
 esac

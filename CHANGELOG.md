@@ -1,5 +1,40 @@
 # Changelog
 
+## v2.4.0 — 2026-04-16
+
+### Added (tagarr_migrate.sh)
+
+- **Opt-in script auto-update.** `tagarr_migrate.sh` can now check-and-update the tagarr scripts themselves (not just their `.conf` files) on every invocation. **Off by default — zero behavior change for existing users who don't configure it.** Enabled per script via a new `tagarr_migrate.conf` file.
+
+  **First-time setup (one-off, manual):**
+  ```bash
+  # From your tagarr scripts directory:
+  curl -O https://raw.githubusercontent.com/ProphetSe7en/tagarr/main/tagarr_migrate.conf.sample
+  cp tagarr_migrate.conf.sample tagarr_migrate.conf
+  # Edit tagarr_migrate.conf — uncomment AUTOUPDATE_<SCRIPT>=true for each
+  # script you want auto-updated on every migrate run.
+  ```
+
+  Example contents after enabling for `tagarr_import.sh`:
+  ```
+  AUTOUPDATE_TAGARR_IMPORT=true
+  AUTOUPDATE_TAGARR_IMPORT_DIR=""   # optional — blank = migrate script's dir
+  ```
+
+  When enabled for a script, the migrate flow reads the local `SCRIPT_VERSION`, fetches the current version from `versions.json` on GitHub, and only downloads a replacement if remote is strictly newer (same `sort -V` gate introduced in v2.3.7 — protects users running ahead of `main`).
+
+  Old scripts are backed up as `<script>.old` before replacement. File permissions and ownership are preserved by overwriting the existing file in place (never `mv`-ing a fresh `mktemp` on top). Sanity check ensures the downloaded file begins with a shebang before replacement; download failures and missing scripts are reported without aborting the config migration.
+
+  Requires `jq` and `curl`. Missing dependencies → auto-update is skipped with a warning; config migration continues normally. `tagarr_migrate.sh` itself uses its existing self-update mechanism and is intentionally NOT part of the auto-update list to avoid conflict.
+
+  Summary printed after the check — counts for updated, skipped (with reason: already current / ahead of remote / not in versions.json / not found at path), and failed scripts.
+
+- **`tagarr_migrate.conf` added to the supported config list.** Once the file exists locally, `tagarr_migrate.sh --all` picks it up alongside `tagarr.conf` / `tagarr_import.conf` etc., and future additions to the `AUTOUPDATE_*` surface (e.g. new scripts) can be migrated in like any other config — preserving your existing enabled/disabled choices and adding new slots commented out.
+
+### Changed (tagarr_migrate.sh)
+
+- **Auto-update step is guarded against `--all` recursion** via a new `TAGARR_MIGRATE_SKIP_AUTO_UPDATE=1` env var set on recursive subcalls. The script-update check runs once in the outer invocation, not per migrated config.
+
 ## v2.3.7 — 2026-04-16
 
 ### Fixed (update-check in all 7 scripts)
