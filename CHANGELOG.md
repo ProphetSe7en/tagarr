@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.5.2 — 2026-04-16
+
+### Added (tagarr_migrate.sh)
+
+- **Logging to `logs/tagarr_migrate.log`** — event-based, minimal, audit-friendly. Writes timestamped entries for: migrate self-update, per-script auto-updates (success + failure with reason), script-update summary (counts of updated / current / failed), per-config migration (with version-from-to), per-run totals (`run start` / `configs: N scanned across M dir(s)` / `run complete`). Deliberately does NOT log per-script "already current" or per-config "already up to date" — a no-op run is 4 lines, a real-work run adds one line per actual change. Rotates at 2 MiB (one `.old` backup, matches the pattern used by `tagarr.sh` and `tagarr_import.sh`). Failure-tolerant: if the log dir isn't writable, log calls silently skip — never aborts the script. Makes cron-based migrate invocations auditable without requiring users to pipe stdout themselves.
+
 ## v2.5.1 — 2026-04-16
 
 ### Fixed (tagarr_migrate.sh)

@@ -52,6 +52,22 @@ SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
 GITHUB_BASE="https://raw.githubusercontent.com/ProphetSe7en/tagarr/main"
 SELF_URL="${GITHUB_BASE}/tagarr_migrate.sh"
 
+# --- Logging ---
+# Writes timestamped events to logs/tagarr_migrate.log next to the script.
+# Failure-tolerant: if the log dir isn't writable, log calls silently skip.
+# Rotates at 2 MiB to keep one .old backup (matches tagarr.sh's pattern).
+LOG_FILE="${SCRIPT_DIR}/logs/tagarr_migrate.log"
+log() {
+    local msg="$1"
+    mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || return 0
+    if [ -f "$LOG_FILE" ]; then
+        local size
+        size=$(stat -c%s "$LOG_FILE" 2>/dev/null || echo 0)
+        [ "$size" -gt 2097152 ] && mv "$LOG_FILE" "${LOG_FILE}.old" 2>/dev/null
+    fi
+    echo "$(date '+%Y-%m-%d %H:%M:%S') $msg" >> "$LOG_FILE" 2>/dev/null || true
+}
+
 # --- Parse flags ---
 NO_UPDATE=false
 ARGS=()
@@ -95,6 +111,7 @@ if [ "$NO_UPDATE" = "false" ] && [ "${TAGARR_MIGRATE_NO_UPDATE:-}" != "1" ]; the
     if curl -fsSL "$SELF_URL" -o "$latest" 2>/dev/null; then
         if ! cmp -s "$SCRIPT_PATH" "$latest"; then
             echo "Updating migration script to latest version..."
+            log "migrate script self-updated (re-exec to pick up new version)"
             cp "$latest" "$SCRIPT_PATH"
             chmod +x "$SCRIPT_PATH"
             rm -f "$latest"
@@ -148,6 +165,7 @@ auto_update_scripts() {
 
     if ! command -v jq >/dev/null 2>&1; then
         echo "WARN: auto-update skipped — jq is required but not installed"
+        log "WARN: auto-update skipped (jq not installed)"
         return 0
     fi
 
@@ -155,6 +173,7 @@ auto_update_scripts() {
     local remote_manifest
     remote_manifest=$(curl -fsSL --max-time 10 "$versions_url" 2>/dev/null) || {
         echo "WARN: auto-update skipped — failed to fetch versions.json"
+        log "WARN: auto-update skipped (failed to fetch versions.json)"
         return 0
     }
 
@@ -202,12 +221,14 @@ auto_update_scripts() {
         tmp=$(mktemp)
         if ! curl -fsSL "${GITHUB_BASE}/${script}" -o "$tmp" 2>/dev/null; then
             failed+=("$script (download failed)")
+            log "script update FAILED: $script (download failed from ${GITHUB_BASE}/${script})"
             rm -f "$tmp"
             continue
         fi
         # Sanity 1: downloaded file must start with a shebang
         if ! head -1 "$tmp" | grep -q '^#!'; then
             failed+=("$script (downloaded file not a script)")
+            log "script update FAILED: $script (downloaded file not a script — no shebang)"
             rm -f "$tmp"
             continue
         fi
@@ -217,6 +238,7 @@ auto_update_scripts() {
         # partial download).
         if ! grep -q '^SCRIPT_VERSION=' "$tmp"; then
             failed+=("$script (downloaded file missing SCRIPT_VERSION marker)")
+            log "script update FAILED: $script (downloaded file missing SCRIPT_VERSION marker)"
             rm -f "$tmp"
             continue
         fi
@@ -226,9 +248,12 @@ auto_update_scripts() {
         cat "$tmp" > "$script_path"
         rm -f "$tmp"
         updated+=("$script: v$local_version -> v$remote_version")
+        log "script updated: $script v$local_version -> v$remote_version in $target_dir"
     done
 
     [ "$any_enabled" = "false" ] && return 0
+
+    log "scripts: ${#updated[@]} updated, ${#skipped[@]} current/skipped, ${#failed[@]} failed"
 
     echo ""
     echo "Script auto-update summary:"
@@ -249,6 +274,7 @@ auto_update_scripts() {
 }
 
 if [ "${TAGARR_MIGRATE_SKIP_AUTO_UPDATE:-}" != "1" ]; then
+    log "run start"
     auto_update_scripts
     # Discovery notice for the opt-in auto-update feature. Shown once per
     # invocation when tagarr_migrate.conf does not exist. Silent once the
@@ -313,6 +339,8 @@ if [ "$RUN_ALL" = "true" ]; then
         TAGARR_MIGRATE_NO_UPDATE=1 TAGARR_MIGRATE_SKIP_AUTO_UPDATE=1 "$SCRIPT_PATH" $update_flag "$f"
         echo ""
     done
+    log "configs: ${#configs[@]} scanned across ${#scan_dirs[@]} dir(s)"
+    log "run complete"
     exit 0
 fi
 
@@ -560,6 +588,8 @@ done < "$SAMPLE_FILE"
 # (mv from mktemp would drop perms to mktemp's 600 default)
 cp "$OLD_CONFIG" "$BACKUP_FILE"
 printf '%s' "$output" > "$OUTPUT_FILE"
+
+log "config migrated: $config_basename version $old_version -> $new_version ($OLD_CONFIG)"
 
 echo "Migration complete!"
 echo ""
