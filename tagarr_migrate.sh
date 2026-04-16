@@ -392,6 +392,7 @@ remote_version=$(echo "$remote_header" | sed -n 's/^# Config version:[[:space:]]
 if [ "$old_version" = "$remote_version" ] && [ "$old_version" != "unknown" ]; then
     echo ""
     echo "Config is already up to date (version $old_version). Nothing to do."
+    log "config current: $config_basename (v$old_version) — $OLD_CONFIG"
     exit 0
 fi
 
@@ -407,12 +408,14 @@ if ! curl -fsSL "$SAMPLE_URL" -o "$SAMPLE_FILE" 2>/dev/null; then
     echo ""
     echo "Check your internet connection, or download manually from:"
     echo "  https://github.com/ProphetSe7en/tagarr/blob/main/${sample_name}"
+    log "config FAILED: $config_basename (sample download failed from $SAMPLE_URL)"
     exit 1
 fi
 
 # Verify it looks like a valid config sample
 if ! grep -q '# ========== CONFIGURATION ==========' "$SAMPLE_FILE"; then
     echo "ERROR: Downloaded file doesn't look like a valid config sample"
+    log "config FAILED: $config_basename (downloaded sample missing CONFIGURATION header)"
     exit 1
 fi
 

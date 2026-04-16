@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.5.3 — 2026-04-17
+
+### Changed (tagarr_migrate.sh)
+
+- **Per-config log lines for `already up to date` and download-failure cases.** v2.5.2 only logged configs that were actually migrated — a no-op run left users wondering whether each config had been scanned and evaluated, or silently skipped. Reports from the field confirmed the terseness was confusing: "migrate isn't updating tagarr_migrate.conf" when in fact it was checking it every run and correctly leaving it alone. Now every config in the scan list generates a log line: `config current:`, `config migrated:`, or `config FAILED:`. Each line includes the basename, version, and full path so users can trace exactly what was processed where. The `configs: N scanned across M dir(s)` summary is kept for at-a-glance totals. Script auto-update summary (`scripts: N updated, ...`) unchanged — its counts remain the primary signal for that side.
+
 ## v2.5.2 — 2026-04-16
 
 ### Added (tagarr_migrate.sh)
