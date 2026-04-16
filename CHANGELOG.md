@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.4.1 — 2026-04-16
+
+### Fixed (tagarr_migrate.sh)
+
+- **Config migration no longer drops file permissions to 600.** The old write path was `mktemp` → `printf > tempfile` → `mv tempfile target`, which replaced the live config with the `mktemp` file's default 600 permissions (`rw-------`). Installs that relied on 666 or group-readable configs for Radarr/Sonarr process access could silently break after migration. Fixed by writing directly into the destination (`printf > "$OUTPUT_FILE"`), preserving inode, permissions, and ownership. Pre-existing bug, not introduced by v2.4.0 — surfaced while testing the v2.4.0 auto-update flow (which already uses the correct in-place overwrite pattern).
+
+### Added (tagarr_migrate.sh)
+
+- **Discovery notice for the opt-in script auto-update feature.** When `tagarr_migrate.sh` self-updates to a new version AND `tagarr_migrate.conf` does not exist, a short tip prints after the "Updating migration script…" line pointing at the sample config URL. Fires only on actual version bumps, so it doesn't nag on every invocation — users see it once or twice a year at most. Suppressed completely once `tagarr_migrate.conf` exists (opted-in or deliberately ignored by keeping a fully-commented copy). Without this, the v2.4.0 feature stayed effectively invisible — users discovered it only by reading CHANGELOG or Discord.
+
 ## v2.4.0 — 2026-04-16
 
 ### Added (tagarr_migrate.sh)

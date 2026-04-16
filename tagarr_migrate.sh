@@ -91,6 +91,18 @@ if [ "$NO_UPDATE" = "false" ] && [ "${TAGARR_MIGRATE_NO_UPDATE:-}" != "1" ]; the
             cp "$latest" "$SCRIPT_PATH"
             chmod +x "$SCRIPT_PATH"
             rm -f "$latest"
+            # Discovery hint — only when user hasn't created tagarr_migrate.conf yet.
+            # Skipped once they've opted in (or deliberately ignored by leaving a
+            # fully-commented copy in place).
+            if [ ! -f "${SCRIPT_DIR}/tagarr_migrate.conf" ]; then
+                echo ""
+                echo "Tip: opt-in auto-update of tagarr scripts is available."
+                echo "Enable by fetching the sample config:"
+                echo "  curl -O https://raw.githubusercontent.com/ProphetSe7en/tagarr/main/tagarr_migrate.conf.sample"
+                echo "  cp tagarr_migrate.conf.sample tagarr_migrate.conf"
+                echo "Then edit to uncomment scripts you want auto-updated."
+                echo ""
+            fi
             TAGARR_MIGRATE_NO_UPDATE=1 exec "$SCRIPT_PATH" "$@"
         fi
     fi
@@ -487,12 +499,10 @@ while IFS= read -r line; do
 done < "$SAMPLE_FILE"
 
 # --- Write output ---
-TEMP_OUTPUT=$(mktemp)
-printf '%s' "$output" > "$TEMP_OUTPUT"
-
-# Backup original, replace with new
+# Backup original, then overwrite in place to preserve permissions/ownership
+# (mv from mktemp would drop perms to mktemp's 600 default)
 cp "$OLD_CONFIG" "$BACKUP_FILE"
-mv "$TEMP_OUTPUT" "$OUTPUT_FILE"
+printf '%s' "$output" > "$OUTPUT_FILE"
 
 echo "Migration complete!"
 echo ""
