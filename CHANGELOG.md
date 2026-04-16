@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.3.7 — 2026-04-16
+
+### Fixed (update-check in all 7 scripts)
+
+- **Spurious "Update available: v1.5.3 (current: v1.5.7)" log entries.** The update check compared `latest != SCRIPT_VERSION` — triggering on *any* mismatch, including when the local script was newer than what `versions.json` advertised. Real-world trigger: a user who pulled `tagarr_import.sh` v1.5.7 from `main` saw an "update available" notice pointing at v1.5.3 because `versions.json` in the repo had been left at 1.5.3 through v1.5.4–v1.5.7 pushes. Fixed the comparison in all seven scripts (`tagarr.sh`, `tagarr_import.sh`, `tagarr_import_sonarr.sh`, `tagarr_list.sh`, `tagarr_recover.sh`, `tagarr_remove.sh`, `tagarr_rename.sh`) to only alert when remote is strictly newer — semver-aware via `sort -V`. Works on GNU and BSD sort; falls back to silent-no-alert if `sort -V` is unavailable. Discord footer's "Update available" tag is gated on the same logic.
+
+### Changed
+
+- **`versions.json` now matches actual script versions.** `tagarr_import.sh` was recorded as `1.5.3` while the file on `main` was `1.5.7` — four sequential patch releases (v1.5.4–v1.5.7) never bumped the manifest. Sync restored. `/push` flow will now verify `versions.json` matches `SCRIPT_VERSION=` in every `*.sh` before pushing, so this drift can't recur silently.
+
 ## v2.3.6 — 2026-04-16
 
 ### Fixed (tagarr_migrate.sh)

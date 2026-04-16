@@ -117,7 +117,10 @@ _check_for_update() {
     remote_json=$(curl -fsSL --max-time 5 "$versions_url" 2>/dev/null) || return 0
     local latest
     latest=$(echo "$remote_json" | jq -r --arg s "$script_name" '.[$s] // ""' 2>/dev/null) || return 0
-    if [ -n "$latest" ] && [ "$latest" != "$SCRIPT_VERSION" ]; then
+    # Only alert when remote is strictly newer than local (sort -V = version sort).
+    # Prevents "update available: older-version" if local runs ahead of versions.json.
+    if [ -n "$latest" ] && [ "$latest" != "$SCRIPT_VERSION" ] && \
+       [ "$(printf '%s\n%s\n' "$latest" "$SCRIPT_VERSION" | sort -V 2>/dev/null | tail -1)" = "$latest" ]; then
         UPDATE_AVAILABLE="$latest"
         log "INFO" "Update available: v${latest} (current: v${SCRIPT_VERSION})"
     fi
