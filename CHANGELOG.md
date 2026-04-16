@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.5.1 — 2026-04-16
+
+### Fixed (tagarr_migrate.sh)
+
+- **Config migration now preserves uncommented settings when the sample has them commented out.** The scalar-variable discovery in the migration engine matched only uncommented lines (`^VAR=...`). Because `tagarr_migrate.conf.sample` keeps all its `AUTOUPDATE_*` slots commented by design (opt-in), a future Config-version bump of that sample would have silently reverted every user's active `AUTOUPDATE_*=true` flag back to commented default — scalar-discovery wouldn't have registered the var names, so the substitution pass would write the sample out verbatim. Latent bug — didn't trigger yet because the sample has stayed on `# Config version: 1.0`. Fixed by allowing the scalar-var discovery and substitution regexes to match commented-out placeholders (`^[[:space:]]*#?[[:space:]]*([A-Z_]+)=`). When the user has the var uncommented in their config, migrate writes it uncommented; when the user doesn't have it set, the sample's line (commented or not) is kept verbatim. Only counts as a "new setting added" in the summary when the sample's line is uncommented — commented opt-in slots aren't announced as new features each time a user runs migrate. No behavior change for configs whose samples are fully uncommented (tagarr, tagarr_import, tagarr_recover, etc.) — the optional `#?` matches zero `#` in those.
+
+### Added (tagarr_migrate.sh)
+
+- **Secondary sanity check on downloaded scripts.** In addition to the `^#!` shebang check, the auto-update download path now requires a `^SCRIPT_VERSION=` marker. Every script in `versions.json` ships with this line — absence means GitHub returned something unexpected (wrong branch, partial response, or worse). Protects against an auto-update writing a misconfigured file on top of a working one. Existing shebang check stays as the first line of defense.
+
+### Changed (tagarr_migrate.sh)
+
+- **`versions.json` fetch timeout raised from 5s to 10s.** More forgiving on slow connections. Script-download calls already use the default curl timeout, which is generous.
+
 ## v2.5.0 — 2026-04-16
 
 ### Changed (tagarr_migrate.sh)

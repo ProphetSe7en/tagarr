@@ -153,7 +153,7 @@ auto_update_scripts() {
 
     local versions_url="${GITHUB_BASE}/versions.json"
     local remote_manifest
-    remote_manifest=$(curl -fsSL --max-time 5 "$versions_url" 2>/dev/null) || {
+    remote_manifest=$(curl -fsSL --max-time 10 "$versions_url" 2>/dev/null) || {
         echo "WARN: auto-update skipped — failed to fetch versions.json"
         return 0
     }
@@ -205,9 +205,18 @@ auto_update_scripts() {
             rm -f "$tmp"
             continue
         fi
-        # Sanity: downloaded file must be a script
+        # Sanity 1: downloaded file must start with a shebang
         if ! head -1 "$tmp" | grep -q '^#!'; then
             failed+=("$script (downloaded file not a script)")
+            rm -f "$tmp"
+            continue
+        fi
+        # Sanity 2: must carry our SCRIPT_VERSION= signature. Every tagarr
+        # script listed in versions.json has this marker — absence means
+        # GitHub returned something else (hijacked mirror, wrong branch,
+        # partial download).
+        if ! grep -q '^SCRIPT_VERSION=' "$tmp"; then
+            failed+=("$script (downloaded file missing SCRIPT_VERSION marker)")
             rm -f "$tmp"
             continue
         fi
@@ -420,6 +429,11 @@ for arr_name in "${!ARRAY_VARS[@]}"; do
 done
 
 # --- Discover scalar variable names from sample ---
+# Catches both uncommented (VAR=default) and commented-out placeholders
+# (#VAR=default). Commented-out placeholders are used by tagarr_migrate.conf
+# to represent opt-in slots — users uncomment them to enable. Without catching
+# commented forms here, migrating tagarr_migrate.conf would silently drop the
+# user's uncommented AUTOUPDATE_* values.
 SCALAR_VARS=()
 in_array=false
 while IFS= read -r line; do
@@ -432,8 +446,9 @@ while IFS= read -r line; do
         [[ "$line" =~ ^[[:space:]]*\) ]] && in_array=false
         continue
     fi
-    # Scalar variable assignment
-    if [[ "$line" =~ ^[[:space:]]*([A-Z_]+)= ]]; then
+    # Scalar variable assignment — optionally preceded by a #, with optional
+    # whitespace between # and the var name.
+    if [[ "$line" =~ ^[[:space:]]*#?[[:space:]]*([A-Z_]+)= ]]; then
         SCALAR_VARS+=("${BASH_REMATCH[1]}")
     fi
 done < "$SAMPLE_FILE"
@@ -502,10 +517,13 @@ while IFS= read -r line; do
         continue
     fi
 
-    # Replace scalar variable assignments with old values
+    # Replace scalar variable assignments with old values.
+    # Matches both uncommented and commented-out forms of the var. If the user
+    # had it uncommented (active), write uncommented. Otherwise keep the sample
+    # line exactly as-is (commented or not).
     matched=false
     for var in "${SCALAR_VARS[@]}"; do
-        if [[ "$line" =~ ^[[:space:]]*${var}= ]]; then
+        if [[ "$line" =~ ^[[:space:]]*#?[[:space:]]*${var}= ]]; then
             matched=true
             if [ -n "${old_has_var[$var]:-}" ]; then
                 inline_comment=""
@@ -519,8 +537,13 @@ while IFS= read -r line; do
                     output+="${var}=\"${old_value}\"${inline_comment}"$'\n'
                 fi
             else
+                # Keep sample's line verbatim — preserves commented-out
+                # opt-in slots that the user hasn't enabled. Only report
+                # as "new setting" if sample had it uncommented (real default).
                 output+="${line}"$'\n'
-                new_vars+=("$var")
+                if ! [[ "$line" =~ ^[[:space:]]*# ]]; then
+                    new_vars+=("$var")
+                fi
             fi
             break
         fi
