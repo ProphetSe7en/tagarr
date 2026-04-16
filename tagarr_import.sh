@@ -2,7 +2,7 @@
 
 # -----------------------------------------------------------------------------
 # Tagarr Import — Event-Driven Radarr Tagger with Discovery
-# Version: 1.5.3
+# Version: 1.5.4
 #
 # Radarr Connect handler that tags individual movies on import, upgrade, or
 # file delete events. Tags are based on release group, quality source
@@ -33,7 +33,7 @@
 # Test with a single movie before enabling as a Radarr Connect handler.
 # -----------------------------------------------------------------------------
 
-SCRIPT_VERSION="1.5.3"
+SCRIPT_VERSION="1.5.4"
 
 ########################################
 # CONFIG LOADING
@@ -1111,9 +1111,12 @@ if [ "${ENABLE_DISCOVERY:-false}" = "true" ] && [ -n "$RELEASE_GROUP_FIELD" ] &&
                 insert_line="    #\"${rg_key}:${rg_key}:${discovered_group}:filtered\"              # Discovered ${today}: ${discovered_quality} + ${discovered_audio}"
             fi
 
-            # Find the closing ) of RELEASE_GROUPS array (locked to prevent concurrent write corruption)
+            # Find the closing ) of RELEASE_GROUPS array (locked to prevent concurrent write corruption).
+            # Use -n (non-blocking) — BusyBox flock inside the Radarr container
+            # does not support -w (timeout). If the lock is held, skip this
+            # discovery write; the next Grab with the same group will retry.
             (
-                flock -w 10 200 || { echo "LOCK_FAIL"; exit 1; }
+                flock -n 200 || { echo "LOCK_FAIL"; exit 1; }
 
                 rg_start_line=$(grep -n 'RELEASE_GROUPS=(' "$CONFIG_FILE" | head -n1 | cut -d: -f1)
 

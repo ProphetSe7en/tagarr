@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.3.2 — 2026-04-16
+
+### Fixed (tagarr_import.sh v1.5.4)
+
+- **Discovery writes to config silently skipped inside the Radarr container.** Since v1.5.0 (2026-03-04), the auto-write path that appends newly-discovered release groups to `RELEASE_GROUPS` used `flock -w 10 200` to serialize concurrent writes. BusyBox `flock` — shipped in LinuxServer's Radarr image — does not support `-w` (timeout) and exits with `unrecognized option: w`. The subshell hit its error branch, the config write was skipped, and the outer grep-verification logged `Failed to write discovered group to config`. Every new release group detected since the regression was never persisted; in practice only APEX was hit on 2026-04-16 because the existing group set happened to be stable in the interim. Fix: switch to `flock -n 200` (non-blocking, BusyBox-compatible). Same semantic outcome — skip write if the lock is already held, next Grab retries — but it actually runs. Only `tagarr_import.sh` was affected; no other script uses `flock`.
+
 ## v2.3.1 — 2026-04-15
 
 ### Fixed (tagarr_import.sh v1.5.3)
