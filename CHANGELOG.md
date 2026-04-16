@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.3.6 — 2026-04-16
+
+### Fixed (tagarr_migrate.sh)
+
+- **BSD grep compatibility.** Version detection used `grep -oP` (Perl-compatible regex), which is GNU-only. Users on BSD grep — macOS default, some minimal Linux distros — hit `grep: invalid option -- P` during migration, and the version check fell through to `"unknown"`, defeating the "already up to date" shortcut. Replaced both occurrences with POSIX `sed`. Migration itself already worked on affected systems (the error was non-fatal), but the noise is gone and the version-skip path now fires correctly.
+
+### Removed
+
+- **`tagarr_import_migrate.sh`** — the legacy import-specific migrate script. Replaced by the universal `tagarr_migrate.sh` in v2.1.0 but never deleted. Dead code.
+
 ## v2.3.5 — 2026-04-16
 
 ### Removed (tagarr_import.sh v1.5.7)

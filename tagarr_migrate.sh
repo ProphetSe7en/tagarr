@@ -176,13 +176,15 @@ echo "=========================="
 echo ""
 
 # --- Check local config version before downloading ---
-old_version=$(grep -oP '^# Config version:\s*\K[\d.]+' "$OLD_CONFIG" 2>/dev/null || echo "unknown")
+old_version=$(sed -n 's/^# Config version:[[:space:]]*\([0-9.][0-9.]*\).*/\1/p' "$OLD_CONFIG" 2>/dev/null | head -1)
+[ -z "$old_version" ] && old_version="unknown"
 
 echo "Checking for updates ($config_basename)..."
 
 # Download just the header to read the version (fast)
 remote_header=$(curl -fsSL "$SAMPLE_URL" 2>/dev/null | head -5 || true)
-remote_version=$(echo "$remote_header" | grep -oP '^# Config version:\s*\K[\d.]+' || echo "unknown")
+remote_version=$(echo "$remote_header" | sed -n 's/^# Config version:[[:space:]]*\([0-9.][0-9.]*\).*/\1/p' | head -1)
+[ -z "$remote_version" ] && remote_version="unknown"
 
 if [ "$old_version" = "$remote_version" ] && [ "$old_version" != "unknown" ]; then
     echo ""
