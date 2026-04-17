@@ -1,5 +1,5 @@
 # ========== CONFIGURATION ==========
-# Config version: 1.4
+# Config version: 1.5
 # Config for tagarr_import.sh — Event-Driven Radarr Tagger with Discovery
 #
 # Radarr Connect handler that tags movies on import, recovers missing

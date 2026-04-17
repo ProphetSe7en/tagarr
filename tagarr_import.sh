@@ -23,7 +23,7 @@
 # Setup:
 #   Radarr > Settings > Connect > Custom Script
 #   Path: /scripts/tagarr_import.sh
-#   Events: On Download, On Upgrade, On File Delete
+#   Events: On Grab, On File Import, On File Upgrade, On Movie File Delete
 #
 # Based on auto_tag_import.sh v3.4.1. Configuration: tagarr_import.conf
 #
