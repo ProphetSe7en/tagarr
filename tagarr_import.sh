@@ -33,7 +33,7 @@
 # Test with a single movie before enabling as a Radarr Connect handler.
 # -----------------------------------------------------------------------------
 
-SCRIPT_VERSION="1.5.7"
+SCRIPT_VERSION="1.5.8"
 
 ########################################
 # CONFIG LOADING
@@ -196,8 +196,13 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
     done
 
     if [ -z "$qbit_url" ]; then
-        log "WARN" "Download client '$GRAB_CLIENT' not in QBIT_CLIENTS map — skip"
-        exit 0
+        if [ "${#QBIT_CLIENTS[@]}" -eq 1 ]; then
+            qbit_url="${QBIT_CLIENTS[0]#*:}"
+            log "INFO" "Client '$GRAB_CLIENT' not in QBIT_CLIENTS but only one entry configured — using ${qbit_url}"
+        else
+            log "WARN" "Download client '$GRAB_CLIENT' not in QBIT_CLIENTS map (${#QBIT_CLIENTS[@]} entries) — skip"
+            exit 0
+        fi
     fi
 
     log "INFO" "qBit URL: $qbit_url"

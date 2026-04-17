@@ -1,129 +1,91 @@
 # ========== CONFIGURATION ==========
 # Config version: 1.2
-# Config for tagarr_migrate.sh — opt-in script auto-update + path hints
+# Config for tagarr_migrate.sh
 #
-# This file controls two closely-related things in tagarr_migrate.sh:
-#   1. Which tagarr scripts should be auto-updated on every migrate run
-#   2. Where those tagarr files (script + matching .conf) live on disk
-#
-# ============================================================================
-# Mental model — one path per script, two questions per script
-# ============================================================================
-#
-# For each tagarr script, you answer two independent questions:
-#
-#   Q1. "Where does this script's files live on disk?"
-#       → Set AUTOUPDATE_<SCRIPT>_DIR="/path/to/dir"
-#       → Or leave blank/removed = same directory as tagarr_migrate.sh
-#       → People usually keep script + config together, so this directory
-#         is where BOTH the .sh and its matching .conf are expected to be.
-#
-#   Q2. "Should I auto-update this script when migrate runs?"
-#       → AUTOUPDATE_<SCRIPT>=true to enable
-#       → Commented out (default) = never auto-updated; still reports its
-#         own version status in its own logs when it runs.
-#
-# These are separate decisions. You can tell migrate where a script lives
-# (so it can migrate the matching config there) without enabling auto-
-# update for that script.
+# This file lets tagarr_migrate.sh automatically update your tagarr
+# scripts to the latest version from GitHub. Nothing is enabled by
+# default — you choose which scripts to update by removing the # in
+# front of the lines you want.
 #
 # ============================================================================
-# Examples
+# Quick start
 # ============================================================================
 #
-#   A) Everything lives next to tagarr_migrate.sh, enable auto-update
-#      for tagarr_import.sh only:
+# 1. Copy this file:  cp tagarr_migrate.conf.sample tagarr_migrate.conf
+# 2. Open tagarr_migrate.conf in a text editor
+# 3. Remove the # in front of any script you want auto-updated
+# 4. Run:  ./tagarr_migrate.sh
 #
-#        AUTOUPDATE_TAGARR_IMPORT=true
-#
-#   B) tagarr_import.sh + tagarr_import.conf live in /appdata/radarr/scripts,
-#      and you want both the script auto-updated AND its config migrated
-#      from that directory:
-#
-#        AUTOUPDATE_TAGARR_IMPORT=true
-#        AUTOUPDATE_TAGARR_IMPORT_DIR="/appdata/radarr/scripts"
-#
-#   C) tagarr_recover.sh is in /opt/scripts alongside its config. You
-#      want the config migrated but do NOT want the script auto-updated:
-#
-#        #AUTOUPDATE_TAGARR_RECOVER=true           ← stays commented
-#        AUTOUPDATE_TAGARR_RECOVER_DIR="/opt/scripts"  ← DIR set alone
-#
-#   D) Leave a script fully untouched by migrate:
-#
-#        (both lines commented — default state)
+# That's it. The script checks GitHub for newer versions and updates
+# only the scripts you enabled. Your old script is saved as .old
+# (e.g. tagarr_import.sh.old) so you can always go back.
 #
 # ============================================================================
-# What happens when tagarr_migrate.sh runs
+# What about configs (.conf files)?
 # ============================================================================
 #
-#   Script auto-update (per script):
-#     If AUTOUPDATE_<SCRIPT>=true, the script is checked against
-#     versions.json on GitHub and replaced if the remote is strictly
-#     newer (sort -V gate — we never "update" to an older version).
-#     Old file backed up as <script>.old in the same directory. File
-#     permissions and ownership are preserved.
-#
-#   Config migration (per .conf file):
-#     All directories mentioned in this file's AUTOUPDATE_<SCRIPT>_DIR
-#     settings — plus the directory tagarr_migrate.sh itself is in —
-#     are scanned for tagarr_*.conf files. Every matching config found
-#     is migrated: new fields from the latest sample are added with
-#     defaults, your existing values are preserved, and the old config
-#     is backed up as <config>.old.
-#
-#     This means: if you point AUTOUPDATE_TAGARR_IMPORT_DIR at
-#     /appdata/radarr/scripts, migrate will also migrate the
-#     tagarr_import.conf that sits in that same directory — no need
-#     to invoke migrate separately against that file.
-#
-#   No tagarr_migrate.conf / all settings commented:
-#     No script is auto-updated. Config migration runs as normal,
-#     scanning only the directory tagarr_migrate.sh is in (legacy
-#     behavior). This file being absent or unconfigured is the same
-#     as "opt out of all new features."
+# When you run tagarr_migrate.sh, it also checks your .conf files
+# (like tagarr_import.conf) for new settings. If a new version of the
+# sample has added fields, they get added to your config with safe
+# defaults — your existing values are never changed.
 #
 # ============================================================================
-# Requirements and fallback
+# Scripts in a different folder
 # ============================================================================
 #
-# Requires curl + jq. If either is missing, auto-update is skipped
-# with one warning line and config migration continues normally —
-# no hard failure.
+# By default, the script looks for everything in the same folder as
+# tagarr_migrate.sh. If some of your scripts live elsewhere (for
+# example, Radarr Connect scripts in /appdata/radarr/scripts/), set
+# the _DIR line to point there.
 #
-# Rollback after an auto-update:
-#   mv <script>.old <script>
-# The backup lives next to the script it replaced (in that script's
-# AUTOUPDATE_<SCRIPT>_DIR if set, otherwise next to tagarr_migrate.sh).
+# Example — tagarr_import.sh is in your Radarr appdata:
+#
+#   AUTOUPDATE_TAGARR_IMPORT=true
+#   AUTOUPDATE_TAGARR_IMPORT_DIR="/mnt/user/appdata/radarr/scripts"
+#
+# The script will update tagarr_import.sh there AND check for config
+# files (like tagarr_import.conf) in the same folder.
+#
+# If you leave _DIR blank or commented out, it uses the same folder
+# as tagarr_migrate.sh.
+#
+# ============================================================================
+# Requirements
+# ============================================================================
+#
+# curl and jq must be installed. If either is missing, script updates
+# are skipped with a warning — config migration still works.
+#
+# To undo an update:  mv tagarr_import.sh.old tagarr_import.sh
 
 # ============================================================================
-# SETTINGS — per-script enable + path
+# SETTINGS — remove # to enable auto-update for a script
 # ============================================================================
 
-# tagarr.sh — batch Radarr release-group tagger
+# tagarr.sh — batch tagger (scans your library and tags by release group)
 #AUTOUPDATE_TAGARR=true
 #AUTOUPDATE_TAGARR_DIR=""
 
-# tagarr_import.sh — Radarr Connect import-time tagger (most-used)
+# tagarr_import.sh — Radarr import tagger (runs on every movie import)
 #AUTOUPDATE_TAGARR_IMPORT=true
 #AUTOUPDATE_TAGARR_IMPORT_DIR=""
 
-# tagarr_import_sonarr.sh — Sonarr Connect import-time tagger
+# tagarr_import_sonarr.sh — Sonarr import tagger (same as above, for TV)
 #AUTOUPDATE_TAGARR_IMPORT_SONARR=true
 #AUTOUPDATE_TAGARR_IMPORT_SONARR_DIR=""
 
-# tagarr_list.sh — list movies by tag / release group
+# tagarr_list.sh — list movies by tag or release group
 #AUTOUPDATE_TAGARR_LIST=true
 #AUTOUPDATE_TAGARR_LIST_DIR=""
 
-# tagarr_recover.sh — recover releaseGroup metadata from grab history
+# tagarr_recover.sh — recover missing release group info from grab history
 #AUTOUPDATE_TAGARR_RECOVER=true
 #AUTOUPDATE_TAGARR_RECOVER_DIR=""
 
-# tagarr_remove.sh — remove tagarr-added tags
+# tagarr_remove.sh — remove tags created by tagarr
 #AUTOUPDATE_TAGARR_REMOVE=true
 #AUTOUPDATE_TAGARR_REMOVE_DIR=""
 
-# tagarr_rename.sh — rename release groups across the library
+# tagarr_rename.sh — rename release groups across your library
 #AUTOUPDATE_TAGARR_RENAME=true
 #AUTOUPDATE_TAGARR_RENAME_DIR=""

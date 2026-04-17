@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.6.0 — 2026-04-17
+
+### Fixed (tagarr_import.sh v1.5.8)
+
+- **Single qBit users no longer need to match the download client name exactly.** When `QBIT_CLIENTS` has only one entry and the name doesn't match what Radarr reports, the script now uses that URL anyway (with an info log) instead of skipping with "not in QBIT_CLIENTS map". Users with multiple qBit instances still need names to match for correct routing. This was the root cause of a user-reported grab-rename failure — their Radarr client was named `qBittorrent` but the sample config defaulted to `qBit-movies`.
+
+### Changed (tagarr_import.conf.sample)
+
+- **Rewrote QBIT_CLIENTS documentation for clarity.** Now has step-by-step instructions ("1. Open Radarr, 2. Find the Name, 3. Use it here, 4. Put your URL"). Concrete example with realistic IP. Clear explanation of single vs multiple qBit behavior. Default example changed from `qBit-movies` to `qBittorrent` to match the most common Radarr setup.
+
+### Changed (tagarr_migrate.conf.sample)
+
+- **Complete rewrite of config documentation for accessibility.** Removed jargon ("mental model", "sort -V gate", `AUTOUPDATE_<SCRIPT>` placeholder notation). Replaced with plain-language sections: Quick start (4 steps), What about configs, Scripts in a different folder (with concrete example), Requirements. Config version stays at 1.2 — no structural change, only documentation.
+
 ## v2.5.5 — 2026-04-17
 
 ### Fixed (tagarr_migrate.sh)

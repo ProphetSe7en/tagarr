@@ -176,16 +176,34 @@ GRAB_RENAME_CUSTOM_TOKENS=(
     # "PROPER:\\bproper\\b"
 )
 
-# Map Radarr's "Download Client" name (Settings > Download Clients > Name)
-# to its qBit Web UI URL. The script picks the right qBit instance based
-# on which client Radarr used for the grab. Subnet whitelist or unauthenticated
-# access is required — no credentials are supported in this map.
+# === QBIT CONNECTION ===
+# Tell the script how to reach your qBittorrent Web UI.
+# Format: "Name:URL"
 #
-# Qui users: use your Qui proxy URL instead of a direct qBit URL.
-# Create a proxy API key in Qui (Settings > Client Proxy API Keys) and use:
-#   "qBit-movies:http://your-host:7476/proxy/YOUR_PROXY_KEY"
+# How to fill this in:
+#   1. Open Radarr → Settings → Download Clients
+#   2. Find the Name of your qBit client (e.g. "qBittorrent")
+#   3. Use that exact name as the first part, before the colon
+#   4. Put your qBit Web UI address as the second part, after the colon
+#
+# Example — your Radarr download client is named "qBittorrent"
+# and qBit runs at http://192.168.1.100:8080:
+#
+#   QBIT_CLIENTS=(
+#       "qBittorrent:http://192.168.1.100:8080"
+#   )
+#
+# If you only have one qBit, the name doesn't strictly need to match —
+# the script will use the only URL it finds. But setting it correctly
+# avoids confusing log messages.
+#
+# Multiple qBit instances: add one line per client. The name MUST match
+# so the script knows which qBit handled each grab.
+#
+# Note: qBit must allow API access without login (subnet whitelist or
+# auth bypass). This script does not support username/password auth.
 QBIT_CLIENTS=(
-    "qBit-movies:http://your-host:8080"
+    "qBittorrent:http://your-host:8080"
     # "qBit-tv:http://your-host:8081"
 )
 
