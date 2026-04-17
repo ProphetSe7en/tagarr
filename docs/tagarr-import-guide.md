@@ -380,15 +380,57 @@ Renames the qBit display name to match the Radarr grab title when meaningful CF 
 |--------|-------------|
 | `ENABLE_GRAB_RENAME` | When `true`, the script renames the qBit display name on every grab where meaningful tokens differ. Only changes the display name (cosmetic) — never touches files or folders on disk. Radarr uses this name as `sceneName` for import scoring. Cosmetic-only differences (dots vs spaces, reordering) are skipped entirely. |
 | `GRAB_RENAME_EXCLUDE_SCENE` | When `true`, scene releases are detected and skipped (no rename). Scene detection uses the same pattern as TRaSH Scene CF: resolution + `WEB` without `DL`, or known scene release groups. When `false` (default), scene releases are renamed like everything else. If the rename changes Scene CF matching (e.g. `WEB` → `WEB-DL`), Discord notification includes a ⚠️ Scene CF warning. |
-| `QBIT_CLIENTS` | Maps Radarr's download client name to the qBit Web UI URL. The script picks the right qBit instance based on which client Radarr used for the grab. Format: `"ClientName:http://host:port"`. |
+| `QBIT_CLIENTS` | Tells the script how to reach your qBittorrent. Format: `"ClientName:http://host:port"`. The ClientName should match the name of the download client in Radarr (Settings > Download Clients > Name). **If you only have one qBit**, the name doesn't need to match exactly — the script uses the only URL it finds. **If you have multiple qBit instances**, the name must match so the script routes to the right one. See [QBIT_CLIENTS Setup](#qbit_clients-setup) below for step-by-step instructions. |
 
-**Tokens detected:** Release group, MA WEB-DL, Play WEB-DL, WEB-DL, IMAX, TrueHD, Atmos, DTS-X, DTS-HD MA. Only these trigger a rename and Discord notification.
+**Tokens detected:** Release group, MA WEB-DL, Play WEB-DL, WEB-DL, IMAX, Open Matte, TrueHD, Atmos, DTS-X, DTS-HD MA. Only these trigger a rename and Discord notification. You can add custom tokens via `GRAB_RENAME_CUSTOM_TOKENS` in the config if you notice a specific Custom Format not being picked up — but most users don't need to.
 
 **Prowlarr setup:** This feature works best when Prowlarr is set to use the **release name** from the indexer, not the actual filename. Many release groups (e.g. 126811) strip metadata from filenames — the torrent file might be named `Movie.2024.1080p.WEB.H264` while the indexer's release name is `Movie.2024.1080p.MA.WEB-DL.TrueHD.Atmos.H.265-126811`. Using the release name gives Radarr (and this script) the full metadata.
 
 **Trade-off:** Some trackers rename scene `WEB` releases to `WEB-DL` in their release names. This means scene releases may appear as WEB-DL instead of WEB, which bypasses the Scene CF penalty (-10000). Use `GRAB_RENAME_EXCLUDE_SCENE=true` if you prefer accurate scene detection over consistent import scoring — but note this may cause download loops for scene releases where the tracker renamed WEB to WEB-DL.
 
 **How it relates to Recovery:** Recovery (`ENABLE_RECOVER`) fixes missing release groups **after** import. Grab rename fixes metadata **before** import, preventing the score drop that causes download loops. For affected releases, grab rename makes recovery largely redundant — the metadata is correct from the start. Both can be enabled together safely.
+
+### QBIT_CLIENTS Setup
+
+How to fill in the `QBIT_CLIENTS` setting in your config:
+
+1. Open **Radarr → Settings → Download Clients**
+2. Find the **Name** of your qBit client (e.g. `qBittorrent`)
+3. Note the **URL** of your qBit Web UI (e.g. `http://192.168.1.100:8080`)
+4. Put both in the config, separated by a colon:
+
+```bash
+QBIT_CLIENTS=(
+    "qBittorrent:http://192.168.1.100:8080"
+)
+```
+
+If your client name has **spaces** (e.g. "qBit Movies"), keep the quotes:
+
+```bash
+QBIT_CLIENTS=(
+    "qBit Movies:http://192.168.1.100:8080"
+)
+```
+
+**Multiple qBit instances:** Add one line per client. Names must match so the script knows which qBit handled each grab.
+
+```bash
+QBIT_CLIENTS=(
+    "qBit-movies:http://192.168.1.100:8080"
+    "qBit-4k:http://192.168.1.100:8081"
+)
+```
+
+**Note:** qBit must allow API access without login (subnet whitelist or bypass auth). The script does not support username/password authentication.
+
+**Qui users:** If you use [Qui](https://github.com/iPromKnight/qui) to manage your qBit instances, use the Qui proxy URL instead of a direct qBit URL. Create a proxy API key in Qui (Settings → Client Proxy → Create Client API Key) and use:
+
+```bash
+QBIT_CLIENTS=(
+    "qBittorrent:http://your-host:7476/proxy/YOUR_PROXY_KEY"
+)
+```
 
 ### Discovery
 

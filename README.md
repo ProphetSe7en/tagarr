@@ -21,6 +21,7 @@ Tagarr automatically **tags movies in Radarr** based on which release group made
 | **[Batch Tagger](docs/tagarr-guide.md)** | `tagarr.sh` | Library scanning, quality/audio filters, discovery, dual instance sync. **Start here.** |
 | **[Recovery](docs/tagarr-recover-guide.md)** | `tagarr_recover.sh` | Batch release group recovery, 5-point safety chain, Radarr + Sonarr. |
 | **[Import Handlers](docs/tagarr-import-guide.md)** | `tagarr_import.sh`, `tagarr_import_sonarr.sh` | Real-time Connect handlers for tagging (Radarr) and recovery (Sonarr). |
+| **[Migration & Auto-Update](docs/tagarr-migrate-guide.md)** | `tagarr_migrate.sh` | Keep scripts and configs up to date. Opt-in auto-update, config migration, multi-directory support. |
 | **[Troubleshooting](docs/troubleshooting.md)** | All | Common issues, screenshots, debug instructions, reporting. |
 
 **New to Tagarr?** Start with the [Batch Tagger Guide](docs/tagarr-guide.md) — it explains the core concepts and includes the [recommended workflow](docs/tagarr-guide.md#overall-workflow--how-the-scripts-work-together) for setting up all scripts.
@@ -67,18 +68,21 @@ cp tagarr.conf.sample tagarr.conf && nano tagarr.conf
 
 **`tagarr_list.sh`** — Tags movies from TMDb or Trakt lists. Useful for curated collections like "Reference Audio", "Oscar Winners", or director filmographies. Define lists in `tagarr_list.conf` with format `"source:list_id:tag_name:display_name"`. Runs on a schedule or manually.
 
-**`tagarr_migrate.sh`** — Migrates any tagarr config to the latest format. Downloads the matching sample from GitHub, merges your existing values in, and backs up the original to `.old`. Run after updating to a new version that adds config options. If only one config exists in the directory, it's detected automatically.
+**`tagarr_migrate.sh`** — Keeps your tagarr scripts and configs up to date. Two features:
+
+1. **Config migration** (always on) — Updates your `.conf` files when new settings are added. Downloads the latest sample from GitHub, adds new fields with safe defaults, and keeps all your existing values. Your original config is backed up as `.old`.
+
+2. **Script auto-update** (opt-in) — Automatically updates your tagarr `.sh` scripts to the latest version from GitHub. Enable per script in `tagarr_migrate.conf`. Old scripts are backed up as `.old` before replacement.
 
 ```bash
-# Single config in directory — auto-detected
+# Run everything — update scripts + migrate all configs
 ./tagarr_migrate.sh
 
-# Specify which config to migrate
+# Migrate just one config
 ./tagarr_migrate.sh tagarr_import.conf
-
-# Migrate all tagarr configs at once
-./tagarr_migrate.sh --all
 ```
+
+See the [Migration & Auto-Update Guide](docs/tagarr-migrate-guide.md) for setup instructions.
 
 **`tagarr_remove.sh`** — Bulk-removes one or more tags from all movies in one or both Radarr instances. Useful when you want to clean up old tags or start fresh. Dry-run by default.
 

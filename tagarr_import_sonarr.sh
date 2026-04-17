@@ -16,7 +16,7 @@
 # Setup:
 #   Sonarr > Settings > Connect > Custom Script
 #   Path: /scripts/tagarr_import_sonarr.sh
-#   Events: On Download, On Upgrade
+#   Events: On File Import, On Upgrade
 #
 # Configuration: tagarr_import_sonarr.conf
 #
