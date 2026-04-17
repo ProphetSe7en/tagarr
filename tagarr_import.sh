@@ -308,14 +308,17 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
     _added '\batmos\b'                             && diff_tokens+=("Atmos")
     _added '\bdts[._-]?x\b'                        && diff_tokens+=("DTS-X")
     _added '\bdts[._ -]?hd[._ -]?ma\b'             && diff_tokens+=("DTS-HD MA")
+    _added '\bproper\b'                            && diff_tokens+=("PROPER")
+    _added '\brepack\b'                            && diff_tokens+=("REPACK")
+    _added '\breal\b'                              && diff_tokens+=("REAL")
 
     # Design principle: only tokens that Radarr CANNOT reconstruct from
     # the file itself belong here. MediaInfo-derived CFs (HDR10/HDR10+/
     # DV/HLG, audio channels, resolution, codec) are handled by Radarr's
     # own file analysis — renaming the torrent to preserve those tokens
     # is pointless because the filename already carries them and Radarr
-    # reads the file directly. Only title-only tokens (release group
-    # stripped to digits, Movie Version like IMAX/Open Matte) are worth
+    # reads the file directly. Only title-only tokens (release group,
+    # PROPER/REPACK/REAL, Movie Version like IMAX/Open Matte) are worth
     # chasing via rename.
 
     # User-defined tokens — format per entry: "label:regex". Bash regex,

@@ -159,21 +159,23 @@ GRAB_RENAME_EXCLUDE_SCENE=false
 GRAB_RENAME_IMAX=false             # IMAX / IMAX Enhanced (TRaSH CF)
 GRAB_RENAME_OPEN_MATTE=false       # Open Matte (TRaSH CF, +25 default)
 
-# Custom tokens — user-defined rename triggers in the same spirit as the
-# IMAX / Open Matte flags above. Format per entry: "Label:regex". Script
-# triggers a rename when the grab title matches the regex but the qBit
-# torrent name does not. Bash-compatible regex (no lookaheads, no
-# backreferences).
+# === CUSTOM RENAME TOKENS ===
+# You probably don't need to touch this. The rename already handles
+# the most common tokens automatically:
 #
-# Only add tokens that CANNOT be recovered from the file itself. Radarr
-# reads MediaInfo on every import (HDR format, codec, channels, DV, HDR10+,
-# resolution, bit depth) and matches its own title-regex CFs against the
-# filename — neither path needs our help. The rename is only useful for
-# tokens that exist in the release title but not in the filename/MediaInfo
-# (for example, a release group that the indexer stripped to digits).
+#   Release group, WEB-DL, MA/Play WEB-DL, TrueHD, Atmos, DTS-X,
+#   DTS-HD MA, PROPER, REPACK, REAL, IMAX, Open Matte
+#
+# Only add a token here if you notice a specific Custom Format NOT
+# being picked up after a grab rename. Format: "Label:regex".
+#
+# Example — if you score "Remaster" or "Criterion Collection" in your
+# quality profile and notice those tokens getting lost:
+#   "Remaster:\\bremaster(ed)?\\b"
+#   "Criterion:\\bcriterion\\b"
 GRAB_RENAME_CUSTOM_TOKENS=(
-    # "Remux:\\bremux\\b"
-    # "PROPER:\\bproper\\b"
+    # "Remaster:\\bremaster(ed)?\\b"
+    # "Criterion:\\bcriterion\\b"
 )
 
 # === QBIT CONNECTION ===
