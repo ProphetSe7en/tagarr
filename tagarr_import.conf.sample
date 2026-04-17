@@ -193,6 +193,13 @@ GRAB_RENAME_CUSTOM_TOKENS=(
 #       "qBittorrent:http://192.168.1.100:8080"
 #   )
 #
+# If your client name has spaces (e.g. "qBit Movies"), make sure to
+# keep the quotes around the whole entry — they're required:
+#
+#   QBIT_CLIENTS=(
+#       "qBit Movies:http://192.168.1.100:8080"
+#   )
+#
 # If you only have one qBit, the name doesn't strictly need to match —
 # the script will use the only URL it finds. But setting it correctly
 # avoids confusing log messages.
