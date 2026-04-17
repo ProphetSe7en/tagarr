@@ -164,7 +164,7 @@ GRAB_RENAME_OPEN_MATTE=false       # Open Matte (TRaSH CF, +25 default)
 # the most common tokens automatically:
 #
 #   Release group, WEB-DL, MA/Play WEB-DL, TrueHD, Atmos, DTS-X,
-#   DTS-HD MA, PROPER, REPACK, REAL, IMAX, Open Matte
+#   DTS-HD MA, IMAX, Open Matte
 #
 # Only add a token here if you notice a specific Custom Format NOT
 # being picked up after a grab rename. Format: "Label:regex".
