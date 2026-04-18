@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # -----------------------------------------------------------------------------
 # Tagarr — Radarr Release Group Tagger with Discovery
-# Version: 1.2.0
+# Version: 1.3.0
 #
 # Scans movies in one or two Radarr instances and tags them based on release
 # group, quality source (MA/Play WEB-DL), and lossless audio codec (TrueHD,
