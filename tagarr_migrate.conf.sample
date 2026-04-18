@@ -17,8 +17,9 @@
 # 4. Run:  ./tagarr_migrate.sh
 #
 # That's it. The script checks GitHub for newer versions and updates
-# only the scripts you enabled. Your old script is saved as .old
-# (e.g. tagarr_import.sh.old) so you can always go back.
+# only the scripts you enabled. Your old script is saved in a
+# tagarr_backups/ folder with a date stamp (e.g.
+# tagarr_backups/tagarr_import.sh.2026-04-18) so you can always go back.
 #
 # ============================================================================
 # What about configs (.conf files)?
@@ -56,36 +57,37 @@
 # curl and jq must be installed. If either is missing, script updates
 # are skipped with a warning — config migration still works.
 #
-# To undo an update:  mv tagarr_import.sh.old tagarr_import.sh
+# To undo an update:
+#   cp tagarr_backups/tagarr_import.sh.2026-04-18 tagarr_import.sh
 
 # ============================================================================
 # SETTINGS — remove # to enable auto-update for a script
 # ============================================================================
 
-# tagarr.sh — batch tagger (scans your library and tags by release group)
+# tagarr.sh — scans your library and tags movies by release group
 #AUTOUPDATE_TAGARR=true
 #AUTOUPDATE_TAGARR_DIR=""
 
-# tagarr_import.sh — Radarr import tagger (runs on every movie import)
+# tagarr_import.sh — Radarr Connect handler (tags + recovers on every import)
 #AUTOUPDATE_TAGARR_IMPORT=true
 #AUTOUPDATE_TAGARR_IMPORT_DIR=""
 
-# tagarr_import_sonarr.sh — Sonarr import tagger (same as above, for TV)
+# tagarr_import_sonarr.sh — Sonarr Connect handler (recovers release groups on import)
 #AUTOUPDATE_TAGARR_IMPORT_SONARR=true
 #AUTOUPDATE_TAGARR_IMPORT_SONARR_DIR=""
 
-# tagarr_list.sh — list movies by tag or release group
+# tagarr_list.sh — tags movies from TMDb or Trakt lists
 #AUTOUPDATE_TAGARR_LIST=true
 #AUTOUPDATE_TAGARR_LIST_DIR=""
 
-# tagarr_recover.sh — recover missing release group info from grab history
+# tagarr_recover.sh — fixes missing release groups from grab history
 #AUTOUPDATE_TAGARR_RECOVER=true
 #AUTOUPDATE_TAGARR_RECOVER_DIR=""
 
-# tagarr_remove.sh — remove tags created by tagarr
+# tagarr_remove.sh — bulk-removes tags from movies in Radarr
 #AUTOUPDATE_TAGARR_REMOVE=true
 #AUTOUPDATE_TAGARR_REMOVE_DIR=""
 
-# tagarr_rename.sh — rename release groups across your library
+# tagarr_rename.sh — renames a tag (old name → new name) and migrates movies
 #AUTOUPDATE_TAGARR_RENAME=true
 #AUTOUPDATE_TAGARR_RENAME_DIR=""

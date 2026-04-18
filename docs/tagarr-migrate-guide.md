@@ -24,7 +24,7 @@ When a new version of tagarr adds settings to a config file (like `tagarr_import
 - Downloads the latest `.conf.sample` from GitHub
 - Adds any new settings with safe defaults
 - Keeps all your existing values exactly as they were
-- Backs up your original config as `.old` (e.g. `tagarr_import.conf.old`)
+- Backs up your original config to `tagarr_backups/` with a date stamp
 
 You don't need to configure anything for this — it runs automatically.
 
@@ -35,7 +35,7 @@ If enabled, the script can also update your tagarr `.sh` files to the latest ver
 When enabled for a script:
 - Checks the script's version against `versions.json` on GitHub
 - Only updates if a newer version exists (never downgrades)
-- Backs up the old script as `.old` before replacing
+- Backs up the old script to `tagarr_backups/` with a date stamp before replacing
 - Preserves file permissions and ownership
 
 ---
@@ -167,20 +167,23 @@ To skip this (e.g. for offline testing): `./tagarr_migrate.sh --no-update`
 
 ## Rolling Back
 
-Every update creates a `.old` backup next to the file it replaced:
+Every update creates a dated backup in a `tagarr_backups/` folder next to the file it replaced:
 
-| Updated file | Backup |
-|---|---|
-| `tagarr_import.sh` | `tagarr_import.sh.old` |
-| `tagarr_import.conf` | `tagarr_import.conf.old` |
-
-To undo an update:
-
-```bash
-mv tagarr_import.sh.old tagarr_import.sh
+```
+tagarr_backups/
+  tagarr_import.sh.2026-04-17
+  tagarr_import.sh.2026-04-20
+  tagarr_import.conf.2026-04-17
+  tagarr_import.conf.2026-04-20
 ```
 
-Only one level of backup is kept — each new update overwrites the previous `.old`.
+To undo an update, copy the backup back:
+
+```bash
+cp tagarr_backups/tagarr_import.sh.2026-04-17 tagarr_import.sh
+```
+
+All backups are kept — you can go back to any previous version by date.
 
 ---
 

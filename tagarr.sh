@@ -28,6 +28,12 @@
 #                tagging or modifying any tags. Discovered groups are written
 #                to the config as commented entries, logged, and sent to
 #                Discord (if enabled). Implies --dry-run for tagging only.
+#   --discover-clean
+#                Same scan as --discover, but writes a clean report file
+#                instead of modifying your config. The report includes a
+#                summary, per-movie detail table, and a ready-to-paste
+#                RELEASE_GROUPS block. Useful for seeing everything in your
+#                library that matches your filters without changing anything.
 #
 # Based on tag_and_sync.sh v5.4.1. Configuration: tagarr.conf
 #
@@ -79,6 +85,7 @@ discovered_groups[_]=1; unset "discovered_groups[_]"
 
 DRY_RUN=false
 DISCOVER_ONLY=false
+DISCOVER_CLEAN=false
 SELECTED_TAGS=()
 
 show_help() {
@@ -97,6 +104,13 @@ while [[ $# -gt 0 ]]; do
       ;;
     --discover)
       DISCOVER_ONLY=true
+      DRY_RUN=true
+      ENABLE_DISCOVERY=true
+      shift
+      ;;
+    --discover-clean)
+      DISCOVER_ONLY=true
+      DISCOVER_CLEAN=true
       DRY_RUN=true
       ENABLE_DISCOVERY=true
       shift
@@ -1120,7 +1134,8 @@ main() {
       local rg_lower="${rg,,}"
 
       # Skip if already known (active or commented in config)
-      if [ -z "${known_release_groups[$rg_lower]:-}" ]; then
+      # --discover-clean: treat ALL groups as unknown (clean slate)
+      if [ "$DISCOVER_CLEAN" = true ] || [ -z "${known_release_groups[$rg_lower]:-}" ]; then
         # Run quality + audio filters on combined data
         local disc_quality_detail=""
         local disc_audio_detail=""
@@ -1347,7 +1362,87 @@ main() {
   # WRITE DISCOVERIES TO CONFIG
   ########################################
 
-  if [ "${ENABLE_DISCOVERY:-false}" = "true" ] && [ ${#discovered_groups[@]} -gt 0 ]; then
+  if [ "${ENABLE_DISCOVERY:-false}" = "true" ] && [ ${#discovered_groups[@]} -gt 0 ] && [ "$DISCOVER_CLEAN" = true ]; then
+    # --discover-clean: write a clean report file, don't touch config
+    log ""
+    log "${CYAN}Writing discovery report (--discover-clean mode)...${RESET}"
+
+    local today
+    today=$(date '+%Y-%m-%d')
+
+    # Build dynamic filter description from active config
+    local filter_desc=""
+    if [ "${ENABLE_QUALITY_FILTER:-false}" = "true" ]; then
+        local _q=()
+        [ "${ENABLE_MA_WEBDL:-false}" = "true" ] && _q+=("MA")
+        [ "${ENABLE_PLAY_WEBDL:-false}" = "true" ] && _q+=("Play")
+        if [ ${#_q[@]} -gt 0 ]; then
+            filter_desc="Only $(IFS=/; echo "${_q[*]}")"
+        fi
+    fi
+    if [ "${ENABLE_AUDIO_FILTER:-false}" = "true" ]; then
+        local _a=()
+        [ "${ENABLE_TRUEHD:-false}" = "true" ] && _a+=("TrueHD")
+        [ "${ENABLE_TRUEHD_ATMOS:-false}" = "true" ] && _a+=("Atmos")
+        [ "${ENABLE_DTS_X:-false}" = "true" ] && _a+=("DTS-X")
+        [ "${ENABLE_DTS_HD_MA:-false}" = "true" ] && _a+=("DTS-HD MA")
+        if [ ${#_a[@]} -gt 0 ]; then
+            [ -n "$filter_desc" ] && filter_desc+=" + "
+            if [ ${#_a[@]} -eq 4 ]; then
+                filter_desc+="lossless"
+            else
+                filter_desc+="$(IFS=/; echo "${_a[*]}")"
+            fi
+        fi
+    fi
+    [ -z "$filter_desc" ] && filter_desc="No filters"
+
+    local report_file="${SCRIPT_DIR}/logs/tagarr_discovery_report.log"
+    mkdir -p "$(dirname "$report_file")" 2>/dev/null
+
+    {
+        echo "========================================"
+        echo "Discovery Report: ${today}  |  Known groups: ${#known_release_groups[@]}  |  Filters: ${filter_desc}"
+        echo "========================================"
+        echo ""
+
+        # Summary
+        echo "SUMMARY: ${#discovered_groups[@]} groups, ${#discovery_log_buffer[@]} movies"
+        echo ""
+        for grp in $(printf '%s\n' "${!discovery_log_counts[@]}" | sort); do
+            printf "  %-20s %d movies\n" "$grp" "${discovery_log_counts[$grp]}"
+        done
+        echo ""
+
+        # Detail table
+        echo "RlsGrp  |  Movie  |  Quality  |  Audio  |  Filename"
+        echo "--------|---------|-----------|---------|----------"
+        printf '%s\n' "${discovery_log_buffer[@]}" | sort
+        echo ""
+
+        # Ready-to-paste config block
+        echo "========================================"
+        echo "Ready-to-paste config block"
+        echo "Copy the lines below into your RELEASE_GROUPS array"
+        echo "========================================"
+        echo ""
+        echo "RELEASE_GROUPS=("
+        for rg_key in $(printf '%s\n' "${!discovered_groups[@]}" | sort); do
+            local disc_data="${discovered_groups[$rg_key]}"
+            local disc_display="${disc_data%%|*}"
+            local count="${discovery_log_counts[$disc_display]:-0}"
+            printf '    "%s:%s:%s:filtered"%*s# %s (%d movies)\n' \
+                "$rg_key" "$rg_key" "$disc_display" \
+                $((40 - ${#rg_key} * 2 - ${#disc_display} - 12)) "" \
+                "$filter_desc" "$count"
+        done
+        echo ")"
+    } > "$report_file"
+
+    log "${GREEN}✓ Discovery report written to: ${report_file}${RESET}"
+    log "  ${#discovered_groups[@]} groups, ${#discovery_log_buffer[@]} movies"
+
+  elif [ "${ENABLE_DISCOVERY:-false}" = "true" ] && [ ${#discovered_groups[@]} -gt 0 ]; then
     log ""
     log "${CYAN}Writing ${#discovered_groups[@]} discovered groups to config...${RESET}"
 

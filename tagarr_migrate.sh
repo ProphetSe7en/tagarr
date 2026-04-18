@@ -16,7 +16,7 @@
 #   - Lists which new settings were added so you can review them
 #
 # What it does NOT do:
-#   - Never modifies your original config file (backed up to .old)
+#   - Never modifies your original config file (backed up to tagarr_backups/)
 #   - Never enables new features automatically
 #
 # Requirements:
@@ -37,10 +37,10 @@
 #   tagarr_list.conf
 #
 # Output:
-#   Backs up your config to .old, then replaces it with the migrated
-#   version. To review or roll back:
-#     diff tagarr_import.conf.old tagarr_import.conf
-#     mv tagarr_import.conf.old tagarr_import.conf
+#   Backs up your config to tagarr_backups/ with a date stamp, then
+#   replaces it with the migrated version. To review or roll back:
+#     diff tagarr_backups/tagarr_import.conf.2026-04-17 tagarr_import.conf
+#     cp tagarr_backups/tagarr_import.conf.2026-04-17 tagarr_import.conf
 #
 # Author: prophetSe7en
 # -----------------------------------------------------------------------------
@@ -243,7 +243,10 @@ auto_update_scripts() {
             continue
         fi
 
-        cp "$script_path" "${script_path}.old"
+        # Backup to tagarr_backups/ with datestamp before replacing
+        backup_dir="${target_dir}/tagarr_backups"
+        mkdir -p "$backup_dir" 2>/dev/null
+        cp "$script_path" "${backup_dir}/${script}.$(date '+%Y-%m-%d')"
         # Overwrite in place to preserve existing permissions/ownership
         cat "$tmp" > "$script_path"
         rm -f "$tmp"
@@ -260,7 +263,7 @@ auto_update_scripts() {
     if [ ${#updated[@]} -gt 0 ]; then
         echo "  Updated (${#updated[@]}):"
         for x in "${updated[@]}"; do echo "    - $x"; done
-        echo "  Previous versions backed up with .old suffix."
+        echo "  Previous versions backed up to tagarr_backups/ with date stamp."
     fi
     if [ ${#skipped[@]} -gt 0 ]; then
         echo "  Skipped (${#skipped[@]}):"
@@ -419,7 +422,10 @@ if ! grep -q '# ========== CONFIGURATION ==========' "$SAMPLE_FILE"; then
     exit 1
 fi
 
-BACKUP_FILE="${OLD_CONFIG}.old"
+config_dir=$(dirname "$OLD_CONFIG")
+backup_dir="${config_dir}/tagarr_backups"
+mkdir -p "$backup_dir" 2>/dev/null
+BACKUP_FILE="${backup_dir}/${config_basename}.$(date '+%Y-%m-%d')"
 OUTPUT_FILE="$OLD_CONFIG"
 new_version="$remote_version"
 
@@ -610,7 +616,7 @@ echo "Your original config has been backed up to:"
 echo "  $BACKUP_FILE"
 echo ""
 echo "To review what changed:"
-echo "  diff \"$BACKUP_FILE\" \"$OUTPUT_FILE\""
+echo "  diff \"$BACKUP_FILE\" \"$OLD_CONFIG\""
 echo ""
 echo "To roll back:"
-echo "  mv \"$BACKUP_FILE\" \"$OUTPUT_FILE\""
+echo "  cp \"$BACKUP_FILE\" \"$OLD_CONFIG\""

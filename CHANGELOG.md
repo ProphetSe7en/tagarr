@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.7.0 — 2026-04-18
+
+### Added (tagarr.sh)
+
+- **`--discover-clean` trigger.** Runs the same library scan as `--discover` but writes a clean report to `logs/tagarr_discovery_report.log` instead of modifying the config. The report includes a summary, per-movie detail table, and a ready-to-paste `RELEASE_GROUPS` array with filter-based comments and movie counts. Treats the config as empty — discovers everything matching your filters, including groups already configured. Config is never touched.
+
+### Changed
+
+- **Backups now go to `tagarr_backups/` folder** with date stamps instead of `.old` files in the main directory (tagarr_migrate.sh).
+- **Connect event names** corrected in both import scripts to match Radarr/Sonarr UI.
+- **Config sample bumped to v1.5** (tagarr_import.conf.sample) — distributes QBIT_CLIENTS docs, custom tokens cleanup, Qui proxy instructions.
+- **Script descriptions** in tagarr_migrate.conf.sample corrected to match actual script purposes.
+
+### Added (documentation)
+
+- **Migration & Auto-Update Guide** (`docs/tagarr-migrate-guide.md`)
+- **QBIT_CLIENTS Setup section** in Import Guide with step-by-step + Qui proxy
+- **README** updated with migrate guide link
+
 ## v2.6.0 — 2026-04-17
 
 ### Fixed (tagarr_import.sh v1.5.8)

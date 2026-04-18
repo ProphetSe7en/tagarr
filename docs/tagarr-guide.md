@@ -171,6 +171,21 @@ ENABLE_DISCOVERY=true
 
 Discovery works in both `tagarr.sh` (batch scan) and `tagarr_import.sh` (per-import). New groups appear as commented entries in your config — uncomment the ones you want to tag.
 
+#### Clean discovery report
+
+If you want to see everything that matches your filters without changing your config, use `--discover-clean`:
+
+```bash
+./tagarr.sh --discover-clean
+```
+
+This writes a report to `logs/tagarr_discovery_report.log` with:
+- **Summary** — how many groups and movies were found
+- **Detail table** — every matching movie with group, quality, audio, and filename
+- **Ready-to-paste config block** — a complete `RELEASE_GROUPS` array you can copy straight into your config
+
+Your config is not modified. Use this when you want a full overview of what's in your library before deciding what to tag.
+
 ---
 
 ## Configuration Reference
@@ -430,6 +445,7 @@ CLEANUP_UNUSED_TAGS=false
 |--------|-------------|
 | `--dry-run` | Simulate the entire run without making any changes to Radarr. Shows exactly what would be tagged, untagged, created, and deleted. Always start with this when testing a new config. |
 | `--discover` | Run discovery only — scan for new release groups without tagging or modifying any tags. Implies `--dry-run` for the tagging part, but still writes discovered groups to the config file and sends Discord notifications. |
+| `--discover-clean` | Same scan as `--discover`, but writes a clean report to `logs/tagarr_discovery_report.log` instead of modifying your config. The report includes a summary, per-movie detail table, and a ready-to-paste `RELEASE_GROUPS` block with your active filter settings as comments. Use this to see everything in your library that matches your filters without changing anything. |
 | `--tag NAME` | Only process specific release groups by their `tag_name` field (comma-separated). Example: `--tag flux,sic` processes only entries where tag_name is `flux` or `sic`. All other groups are skipped. Useful for testing a single group's behavior. |
 | `--help` | Show usage information and exit. |
 

@@ -59,7 +59,7 @@ cp tagarr.conf.sample tagarr.conf && nano tagarr.conf
 
 | Script | App | Purpose | Run As |
 |--------|-----|---------|--------|
-| `tagarr.sh` | Radarr | Scan all movies, tag by release group with filters | Schedule or manual |
+| `tagarr.sh` | Radarr | Scan all movies, tag by release group with filters, discovery | Schedule or manual |
 | `tagarr_recover.sh` | Both | Fix missing release groups from grab history | Schedule or manual |
 | `tagarr_import.sh` | Radarr | Tag + recover + discover on every import | [Radarr Connect](docs/tagarr-import-guide.md#setup) |
 | `tagarr_import_sonarr.sh` | Sonarr | Recover missing release groups on every import | [Sonarr Connect](docs/tagarr-import-guide.md#setup) |
@@ -70,9 +70,9 @@ cp tagarr.conf.sample tagarr.conf && nano tagarr.conf
 
 **`tagarr_migrate.sh`** — Keeps your tagarr scripts and configs up to date. Two features:
 
-1. **Config migration** (always on) — Updates your `.conf` files when new settings are added. Downloads the latest sample from GitHub, adds new fields with safe defaults, and keeps all your existing values. Your original config is backed up as `.old`.
+1. **Config migration** (always on) — Updates your `.conf` files when new settings are added. Downloads the latest sample from GitHub, adds new fields with safe defaults, and keeps all your existing values. Your original config is backed up to `tagarr_backups/` with a date stamp.
 
-2. **Script auto-update** (opt-in) — Automatically updates your tagarr `.sh` scripts to the latest version from GitHub. Enable per script in `tagarr_migrate.conf`. Old scripts are backed up as `.old` before replacement.
+2. **Script auto-update** (opt-in) — Automatically updates your tagarr `.sh` scripts to the latest version from GitHub. Enable per script in `tagarr_migrate.conf`. Old scripts are backed up to `tagarr_backups/` with a date stamp before replacement.
 
 ```bash
 # Run everything — update scripts + migrate all configs
