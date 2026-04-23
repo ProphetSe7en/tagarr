@@ -4,7 +4,7 @@ Automated movie tagging for [Radarr](https://radarr.video/) based on release gro
 
 ## What Does This Do?
 
-When you download movies through Radarr, each release comes from a **release group** (like FLUX, BHD, FraMeSToR, etc.). Some groups consistently deliver premium quality — lossless audio (TrueHD Atmos, DTS:X), high-bitrate encodes, or WEB-DLs from premium sources like Movies Anywhere.
+When you download movies through Radarr, each release comes from a **release group** — the team or uploader that produced the file. Some groups consistently deliver premium quality: lossless audio (TrueHD Atmos, DTS:X), high-bitrate encodes, or WEB-DLs from premium sources like Movies Anywhere.
 
 Tagarr automatically **tags movies in Radarr** based on which release group made the file, with optional quality and audio filtering so only premium releases get tagged. It also **recovers missing release groups** in both Radarr and Sonarr by looking up the original grab in history.
 

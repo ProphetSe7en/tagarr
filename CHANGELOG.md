@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.8.0 — 2026-04-23
+
+### Changed (tagarr_import.sh v1.6.0) — behavioral
+
+- **Grab-rename now covers the full TRaSH [Optional] Movie Versions CF group.** `GRAB_RENAME_IMAX` and `GRAB_RENAME_OPEN_MATTE` are replaced by a single `GRAB_RENAME_MOVIE_VERSION` toggle (default `true`). When enabled, the rename trigger fires whenever the grab title carries any of these title-only tokens but the qBit torrent name doesn't: Director's Cut, Theatrical, Extended, Unrated, Uncut, Remaster (also matches 4K Remaster / Remastered), Criterion, Masters of Cinema, Vinegar Syndrome, Hybrid, IMAX (also matches IMAX Enhanced), Open Matte. Regexes are simplified — one concept per match, not one-per-CF — so `\bimax\b` covers both IMAX variants and `\bremaster(ed)?\b` covers both Remaster variants. Discord label uses the concept name; Radarr still re-scores the renamed title against its full CF set on import so the exact variant is matched there. Real-world trigger: a Den of Thieves 2 grab with `Director's.Cut` in the release title but not in the torrent name — previous versions skipped rename ("no meaningful tokens to recover") and the Special Edition CF (+125) was lost on import. Behavioral change: users on previous versions with both IMAX and Open Matte set to `false` now get broader rename coverage by default; set `GRAB_RENAME_MOVIE_VERSION=false` to opt out entirely. `tagarr_migrate.sh` removes the two old vars on config version bump 1.5 → 1.6.
+
+### Changed (tagarr_import.sh)
+
+- **Audio-codec tokens removed from grab-rename trigger list.** Previously `ENABLE_GRAB_RENAME` forced a rename when the grab title carried TrueHD / Atmos / DTS-X / DTS-HD MA but the torrent name didn't. These are MediaInfo-derivable — Radarr reads the audio format directly from the file on import, so chasing them via rename was cosmetic only and violated the design principle that grab-rename should recover **only** tokens Radarr can't reconstruct from the file. Real-world trigger: a Mission: Impossible grab with `TrueHD5.1` (no separator) — the `\btruehd\b` word-boundary regex didn't match the concatenated form, rename fired unnecessarily, Discord notification spam. Audio filtering in `check_audio_match()` is unchanged — that path still scans the filename and tags correctly.
+
+- **Discord grab-rename card cleaned up.** Previously two inline fields — "Quality Recovered" (source + IMAX/Open Matte) and "Audio Recovered" (TrueHD/Atmos/DTS-X/DTS-HD MA). After the audio-token removal the Audio field became dead, and the Quality field's `case` filter silently dropped every new Movie Version token added in this release (Director's Cut, Theatrical, Extended, Remaster, Criterion, ...) since they weren't on the allowlist. Both fields replaced by a single **"Tokens Recovered"** field that lists every non-group token that triggered the rename, so the notification always reflects the actual reason — whether that's `Director's Cut`, `IMAX`, `WEB-DL`, or multiple. "Release Group Recovered" remains its own field, so group vs. other-tokens are still distinguishable.
+
+### Changed (tagarr_import.conf.sample)
+
+- **Config version bumped 1.5 → 1.6.** Triggers one-time migration for existing users:
+    - Adds `GRAB_RENAME_MOVIE_VERSION=true` to every config.
+    - Keeps `GRAB_RENAME_IMAX` and `GRAB_RENAME_OPEN_MATTE` as commented-out backward-compat stubs — `tagarr_migrate.sh` preserves the user's value if set, so users whose config migrates to v1.6 before their script updates to v1.6.0 don't silently lose IMAX/Open Matte rename. The v1.6.0 script ignores those fields entirely; they exist purely as a bridge and will be removed in v1.7 once all deployments have caught up.
+    - `CUSTOM_TOKENS` section reframed as an advanced escape hatch with realistic non-Movie-Version examples (`NORDIC`, `MULTi`, `iNTERNAL`). Previous examples (`Remaster`, `Criterion`) are now built-in and no longer need to be configured manually.
+
 ## v2.7.0 — 2026-04-18
 
 ### Added (tagarr.sh)

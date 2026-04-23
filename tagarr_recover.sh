@@ -276,8 +276,8 @@ DISCORD_FOOTER="Tagarr Recover v${SCRIPT_VERSION} by ProphetSe7en"
 # Returns group name via stdout (exit 0) or nothing (exit 1).
 #
 # Examples:
-#   Movie.Name.2024.WEB-DL.h265-FLUX.mkv             → FLUX
-#   Movie Name 2024 WEB-DL h265-FLUX.mkv              → FLUX
+#   Movie.Name.2024.WEB-DL.h265-MyGroup.mkv           → MyGroup
+#   Movie Name 2024 WEB-DL h265-MyGroup.mkv           → MyGroup
 #   Movie.Name.2024.WEBDL-2160p.DTS-HD.MA.7.1.h265.mkv → (none)
 #   Movie.Name.2024.WEB-DL.DTS-HD.MA.7.1.H.265.mkv   → (none)
 extract_group_from_filename() {

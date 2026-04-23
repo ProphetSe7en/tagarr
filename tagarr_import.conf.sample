@@ -1,5 +1,5 @@
 # ========== CONFIGURATION ==========
-# Config version: 1.5
+# Config version: 1.6
 # Config for tagarr_import.sh — Event-Driven Radarr Tagger with Discovery
 #
 # Radarr Connect handler that tags movies on import, recovers missing
@@ -54,12 +54,9 @@ SECONDARY_RADARR_NAME="Radarr 4K"
 # discovery — the group won't be re-discovered.
 # See docs/tagarr-guide.md for full details on each field.
 RELEASE_GROUPS=(
-    "thefarm:thefarm:TheFarm:filtered"         # Only MA/Play + lossless
-    "flux:flux:FLUX:filtered"                  # Only MA/Play + lossless
-    "sic:sic:SIC:filtered"                     # Only MA/Play + lossless
-    "126811:126811:126811:filtered"             # Only MA/Play + lossless
-    "xebec:xebec:XEBEC:filtered"              # Only MA/Play + lossless
-    #"groupname:tagname:DisplayName:filtered"
+    "mygroup:mygroup:MyGroup:filtered"          # Only MA/Play + lossless
+    "othergroup:othergroup:OtherGroup:filtered" # Only MA/Play + lossless
+    #"groupname:tagname:DisplayName:filtered"   # Uncomment and edit for your own groups
 )
 
 # === QUALITY FILTERS ===
@@ -102,9 +99,13 @@ ENABLE_RECOVER=true
 # === GRAB-TIME RENAME (pre-import metadata fix) [EXPERIMENTAL] ===
 # When Radarr grabs a release, this renames the qBit display name to
 # match radarr_release_title. This ensures Radarr's import parser sees
-# the full release name with all CF-relevant tokens (release group,
-# WEB-DL, IMAX, audio codecs etc.), preventing download loops where
-# stripped torrent names cause score drops below the upgrade threshold.
+# the full release name with title-only CF-relevant tokens (release
+# group, MA/Play WEB-DL, and Optional Movie Versions like Director's
+# Cut / IMAX / Remaster / Theatrical / Hybrid), preventing download
+# loops where stripped torrent names cause score drops below the
+# upgrade threshold. Audio codecs and other MediaInfo-derived tokens
+# (HDR, DV, channels, resolution) are NOT chased here — Radarr reads
+# those from the file itself, so a cosmetic rename would be pointless.
 #
 # Runs on ALL grabs when enabled. The rename is purely cosmetic (qBit
 # display name only, never touches files on disk), but Radarr uses it
@@ -150,32 +151,55 @@ ENABLE_GRAB_RENAME=false
 #   but imports at WEB score (lower), triggering re-grab.
 GRAB_RENAME_EXCLUDE_SCENE=false
 
-# Optional Movie Version tokens to track for grab rename.
-# These are Custom Formats that score based on release title text
-# (not file metadata), so the token can be lost if the torrent name
-# is stripped. When enabled, the script checks if the token is present
-# in the grab title but missing from the qBit name, and includes it
-# as a reason to rename. Default: true (enabled).
-GRAB_RENAME_IMAX=false             # IMAX / IMAX Enhanced (TRaSH CF)
-GRAB_RENAME_OPEN_MATTE=false       # Open Matte (TRaSH CF, +25 default)
+# === OPTIONAL MOVIE VERSIONS ===
+# Only has an effect when ENABLE_GRAB_RENAME=true. Recovers the whole
+# TRaSH [Optional] Movie Versions CF group during grab rename. These
+# are all title-only tokens (Radarr can't read them from the file
+# itself), so they get lost if the torrent name is stripped. When
+# true, grab rename triggers whenever the grab title has one of these
+# tokens and the qBit torrent name doesn't:
+#
+#   Director's Cut, Theatrical, Extended, Unrated, Uncut, Remaster,
+#   4K Remaster (via Remaster), Criterion Collection, Masters of
+#   Cinema, Vinegar Syndrome, Hybrid, IMAX, IMAX Enhanced
+#   (via IMAX), Open Matte
+#
+# Default: true. Set to false if you specifically don't score any of
+# these Custom Formats and want to skip the rename overhead.
+GRAB_RENAME_MOVIE_VERSION=true
 
-# === CUSTOM RENAME TOKENS ===
-# You probably don't need to touch this. The rename already handles
-# the most common tokens automatically:
+# --- Backward-compat stubs (deprecated) ---
+# Replaced by GRAB_RENAME_MOVIE_VERSION in v1.6. Kept commented so
+# tagarr_migrate.sh preserves your value if you had one of these
+# uncommented under an older script — this prevents a silent regression
+# where your IMAX / Open Matte rename would stop firing if the config
+# was migrated to v1.6 before the script caught up to v1.6.0. The v1.6.0
+# script ignores these fields entirely. Safe to delete once every
+# instance reading this config is on v1.6.0 or newer. Will be removed
+# from the sample in v1.7.
+# GRAB_RENAME_IMAX=false
+# GRAB_RENAME_OPEN_MATTE=false
+
+# === CUSTOM RENAME TOKENS (advanced) ===
+# You almost certainly don't need to touch this. The built-in rename
+# already covers everything most users need:
 #
-#   Release group, WEB-DL, MA/Play WEB-DL, TrueHD, Atmos, DTS-X,
-#   DTS-HD MA, IMAX, Open Matte
+#   Release group, WEB-DL variants (MA / Play / plain), and the full
+#   Optional Movie Versions CF group (see GRAB_RENAME_MOVIE_VERSION).
 #
-# Only add a token here if you notice a specific Custom Format NOT
-# being picked up after a grab rename. Format: "Label:regex".
+# This field is an escape hatch for tokens NOT on that list — typically
+# your own custom formats, niche tracker tags, or new TRaSH CFs that
+# the script hasn't been updated for yet.
 #
-# Example — if you score "Remaster" or "Criterion Collection" in your
-# quality profile and notice those tokens getting lost:
-#   "Remaster:\\bremaster(ed)?\\b"
-#   "Criterion:\\bcriterion\\b"
+# Format: "Label:regex" (bash extended regex, no lookaheads).
+#
+# Examples — only useful if you actually score one of these:
+#   "NORDIC:\\bNORDIC\\b"              # Nordic subs custom format
+#   "MULTi:\\bMULTi\\b"                # Multi-audio custom format
+#   "iNTERNAL:\\biNTERNAL\\b"          # Scene "internal" tag
 GRAB_RENAME_CUSTOM_TOKENS=(
-    # "Remaster:\\bremaster(ed)?\\b"
-    # "Criterion:\\bcriterion\\b"
+    # "NORDIC:\\bNORDIC\\b"
+    # "MULTi:\\bMULTi\\b"
 )
 
 # === QBIT CONNECTION ===

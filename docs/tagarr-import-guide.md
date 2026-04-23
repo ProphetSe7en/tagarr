@@ -213,7 +213,7 @@ Unlike the batch script where you run discovery periodically, the import script 
 | **On File Import** | Yes | Fires after Radarr finishes importing a new file. All file metadata (release group, quality, audio) is available. This triggers tagging, recovery, discovery, and secondary sync. |
 | **On File Upgrade** | Yes | Fires after Radarr replaces a file with a better version. The new file is evaluated fresh — old tags that no longer match are removed, new tags are applied. |
 | **On Movie File Delete** | Yes | Fires when you manually delete a file from Radarr. Removes all managed tags since the file they refer to no longer exists. The movie stays in Radarr without tags, ready to be re-grabbed. |
-| **On Grab** | Optional | Fires when Radarr sends a release to the download client. Enables the **Grab Rename** feature (`ENABLE_GRAB_RENAME`) which renames the qBit display name to match the grab title, recovering missing CF tokens (release group, MA WEB-DL, WEB-DL, IMAX, audio codecs). Only renames when meaningful tokens differ — cosmetic differences are skipped. See the `GRAB_RENAME` section in the config file for details, including Prowlarr setup and scene handling. **[EXPERIMENTAL]** |
+| **On Grab** | Optional | Fires when Radarr sends a release to the download client. Enables the **Grab Rename** feature (`ENABLE_GRAB_RENAME`) which renames the qBit display name to match the grab title, recovering missing title-only CF tokens (release group, MA/Play WEB-DL, and Optional Movie Versions like Director's Cut / IMAX / Remaster). Only renames when meaningful tokens differ — cosmetic differences are skipped. See the `GRAB_RENAME` section in the config file for details, including Prowlarr setup and scene handling. **[EXPERIMENTAL]** |
 | **On Movie File Delete For Upgrade** | No | Fires when the old file is deleted during an upgrade, right before the new file is imported. Enabling this would remove all tags and then immediately re-add them when On File Upgrade fires — unnecessary work. |
 
 ### Sonarr (tagarr_import_sonarr.sh)
@@ -370,6 +370,7 @@ ENABLE_RECOVER=true
 ```bash
 ENABLE_GRAB_RENAME=false
 GRAB_RENAME_EXCLUDE_SCENE=false
+GRAB_RENAME_MOVIE_VERSION=true
 ```
 
 Renames the qBit display name to match the Radarr grab title when meaningful CF tokens differ between the torrent name and the grab title. This ensures Radarr's import parser sees the full release name with all Custom Format-relevant tokens, preventing download loops where stripped torrent names cause score drops.
@@ -380,9 +381,10 @@ Renames the qBit display name to match the Radarr grab title when meaningful CF 
 |--------|-------------|
 | `ENABLE_GRAB_RENAME` | When `true`, the script renames the qBit display name on every grab where meaningful tokens differ. Only changes the display name (cosmetic) — never touches files or folders on disk. Radarr uses this name as `sceneName` for import scoring. Cosmetic-only differences (dots vs spaces, reordering) are skipped entirely. |
 | `GRAB_RENAME_EXCLUDE_SCENE` | When `true`, scene releases are detected and skipped (no rename). Scene detection uses the same pattern as TRaSH Scene CF: resolution + `WEB` without `DL`, or known scene release groups. When `false` (default), scene releases are renamed like everything else. If the rename changes Scene CF matching (e.g. `WEB` → `WEB-DL`), Discord notification includes a ⚠️ Scene CF warning. |
+| `GRAB_RENAME_MOVIE_VERSION` | When `true` (default), grab rename also triggers when the release title carries any Optional Movie Version token that's missing from the qBit torrent name: Director's Cut, Theatrical, Extended, Unrated, Uncut, Remaster (also covers 4K Remaster / Remastered), Criterion, Masters of Cinema, Vinegar Syndrome, Hybrid, IMAX (also covers IMAX Enhanced), Open Matte. Covers the full TRaSH `[Optional] Movie Versions` CF group. Set to `false` if you don't score any of these Custom Formats. |
 | `QBIT_CLIENTS` | Tells the script how to reach your qBittorrent. Format: `"ClientName:http://host:port"`. The ClientName should match the name of the download client in Radarr (Settings > Download Clients > Name). **If you only have one qBit**, the name doesn't need to match exactly — the script uses the only URL it finds. **If you have multiple qBit instances**, the name must match so the script routes to the right one. See [QBIT_CLIENTS Setup](#qbit_clients-setup) below for step-by-step instructions. |
 
-**Tokens detected:** Release group, MA WEB-DL, Play WEB-DL, WEB-DL, IMAX, Open Matte, TrueHD, Atmos, DTS-X, DTS-HD MA. Only these trigger a rename and Discord notification. You can add custom tokens via `GRAB_RENAME_CUSTOM_TOKENS` in the config if you notice a specific Custom Format not being picked up — but most users don't need to.
+**Tokens detected:** Release group, MA WEB-DL, Play WEB-DL, WEB-DL, plus the full Optional Movie Versions group when `GRAB_RENAME_MOVIE_VERSION=true` (see above). Only these trigger a rename and Discord notification. **Audio codecs and other MediaInfo-derived tokens (HDR, DV, channels, resolution) are NOT chased here** — Radarr reads those directly from the file on import, so a cosmetic rename would be pointless. You can add your own tokens via `GRAB_RENAME_CUSTOM_TOKENS` in the config if you score a custom format outside this set.
 
 **Prowlarr setup:** This feature works best when Prowlarr is set to use the **release name** from the indexer, not the actual filename. Many release groups (e.g. 126811) strip metadata from filenames — the torrent file might be named `Movie.2024.1080p.WEB.H264` while the indexer's release name is `Movie.2024.1080p.MA.WEB-DL.TrueHD.Atmos.H.265-126811`. Using the release name gives Radarr (and this script) the full metadata.
 

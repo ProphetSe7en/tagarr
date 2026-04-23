@@ -53,12 +53,9 @@ SECONDARY_RADARR_NAME="Radarr 4K"
 # discovery — the group won't be re-discovered. Use this for groups you've
 # reviewed and decided not to tag.
 RELEASE_GROUPS=(
-    "thefarm:thefarm:TheFarm:filtered"         # Only MA/Play + lossless
-    "flux:flux:FLUX:filtered"                  # Only MA/Play + lossless
-    "sic:sic:SIC:filtered"                     # Only MA/Play + lossless
-    "126811:126811:126811:filtered"             # Only MA/Play + lossless
-    "xebec:xebec:XEBEC:filtered"              # Only MA/Play + lossless
-    #"groupname:tagname:DisplayName:filtered"
+    "mygroup:mygroup:MyGroup:filtered"          # Only MA/Play + lossless
+    "othergroup:othergroup:OtherGroup:filtered" # Only MA/Play + lossless
+    #"groupname:tagname:DisplayName:filtered"   # Uncomment and edit for your own groups
 )
 
 # === QUALITY FILTERS ===

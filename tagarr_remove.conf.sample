@@ -26,8 +26,8 @@ SECONDARY_RADARR_NAME="Radarr 4K"
 # List of tag labels to remove from movies. Applied to both instances.
 # Comment out tags you want to keep.
 TAGS_TO_REMOVE=(
-    #"flux"
-    #"sic"
+    #"mygroup"
+    #"othergroup"
     #"groupname"
 )
 

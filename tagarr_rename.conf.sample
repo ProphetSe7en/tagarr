@@ -28,7 +28,7 @@ SECONDARY_RADARR_NAME="Radarr 4K"
 # Applied to both instances. Comment out pairs you don't need.
 TAG_RENAMES=(
     #"old-tag:new-tag"
-    #"flux:flux-v2"
+    #"mygroup:mygroup-v2"
 )
 
 # === OLD TAG CLEANUP ===

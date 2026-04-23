@@ -6,6 +6,7 @@ tagarr_recover.conf
 tagarr_list.conf
 tagarr_remove.conf
 tagarr_rename.conf
+tagarr_migrate.conf
 
 # Logs
 logs/

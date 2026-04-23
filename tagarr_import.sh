@@ -2,7 +2,7 @@
 
 # -----------------------------------------------------------------------------
 # Tagarr Import — Event-Driven Radarr Tagger with Discovery
-# Version: 1.5.8
+# Version: 1.6.0
 #
 # Radarr Connect handler that tags individual movies on import, upgrade, or
 # file delete events. Tags are based on release group, quality source
@@ -33,7 +33,7 @@
 # Test with a single movie before enabling as a Radarr Connect handler.
 # -----------------------------------------------------------------------------
 
-SCRIPT_VERSION="1.5.8"
+SCRIPT_VERSION="1.6.0"
 
 ########################################
 # CONFIG LOADING
@@ -289,34 +289,48 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
         diff_tokens+=("-${GRAB_RG} (release group)")
     fi
 
-    # Token detection — check which CF-relevant tokens are in the grab title
-    # but missing from the qBit torrent name. These are the tokens that matter
-    # for Radarr's Custom Format scoring. Only these trigger Discord notification.
+    # Token detection — check which title-only tokens are in the grab title
+    # but missing from the qBit torrent name. Only these trigger Discord
+    # notification and justify the rename.
     #
-    # Source + audio patterns mirror check_quality_match / check_audio_match
-    # below (~lines 525-575). Update both together.
+    # Design principle: only tokens that Radarr CANNOT reconstruct from
+    # the file itself belong here. MediaInfo-derived CFs (HDR10/HDR10+/
+    # DV/HLG, audio codecs/channels, resolution, video codec) are handled
+    # by Radarr's own file analysis — renaming the torrent to preserve
+    # those tokens is pointless because Radarr reads the file directly.
+    # Only title-only tokens (release group stripped to digits, source
+    # flavor like MA/Play WEB-DL, Movie Version tokens like Director's
+    # Cut / IMAX / Remaster) are worth chasing via rename. Source
+    # patterns mirror check_quality_match below (~lines 525-560). Audio
+    # patterns are intentionally NOT mirrored — check_audio_match still
+    # scans the filename for TrueHD/Atmos/DTS-X/DTS-HD MA, but forcing
+    # a rename to recover those tokens would be cosmetic only.
     ma_or_play_added=false
     _added '\bma(\]?\s*\[?|[._-])web([-.]?dl)?'   && { diff_tokens+=("MA WEB-DL"); ma_or_play_added=true; }
     _added '\bplay(\]?\s*\[?|[._-])web([-.]?dl)?' && { diff_tokens+=("Play WEB-DL"); ma_or_play_added=true; }
     # Standalone WEB-DL only when MA/Play didn't already cover it
     [ "$ma_or_play_added" = "false" ] && _added '\bweb[-.]?dl\b' && diff_tokens+=("WEB-DL")
-    [ "${GRAB_RENAME_IMAX:-false}" = "true" ] && \
-        _added '\bimax\b'                              && diff_tokens+=("IMAX")
-    [ "${GRAB_RENAME_OPEN_MATTE:-false}" = "true" ] && \
-        _added '\bopen[ ._-]?matte\b'                  && diff_tokens+=("Open Matte")
-    _added '\btruehd\b'                            && diff_tokens+=("TrueHD")
-    _added '\batmos\b'                             && diff_tokens+=("Atmos")
-    _added '\bdts[._-]?x\b'                        && diff_tokens+=("DTS-X")
-    _added '\bdts[._ -]?hd[._ -]?ma\b'             && diff_tokens+=("DTS-HD MA")
 
-    # Design principle: only tokens that Radarr CANNOT reconstruct from
-    # the file itself belong here. MediaInfo-derived CFs (HDR10/HDR10+/
-    # DV/HLG, audio channels, resolution, codec) are handled by Radarr's
-    # own file analysis — renaming the torrent to preserve those tokens
-    # is pointless because the filename already carries them and Radarr
-    # reads the file directly. Only title-only tokens (release group
-    # stripped to digits, Movie Version like IMAX/Open Matte) are worth
-    # chasing via rename.
+    # Optional Movie Versions — TRaSH CF group `f4f1474b963b24cf983455743aa9906c`.
+    # All title-only tokens that Radarr can't reconstruct from MediaInfo.
+    # One regex per "concept": `imax` matches both IMAX and IMAX Enhanced,
+    # `remaster(ed)?` matches Remaster / Remastered / 4K Remaster, etc.
+    # We lose the exact CF name in the Discord label but keep the rename
+    # trigger correct — Radarr re-scores the renamed title anyway.
+    [ "${GRAB_RENAME_MOVIE_VERSION:-true}" = "true" ] && {
+        _added "\bdirector('?s)?[._ -]?cut\b"            && diff_tokens+=("Director's Cut")
+        _added '\btheatrical\b'                          && diff_tokens+=("Theatrical")
+        _added '\bextended\b'                            && diff_tokens+=("Extended")
+        _added '\bunrated\b'                             && diff_tokens+=("Unrated")
+        _added '\buncut\b'                               && diff_tokens+=("Uncut")
+        _added '\bremaster(ed)?\b'                       && diff_tokens+=("Remaster")
+        _added '\bcriterion\b'                           && diff_tokens+=("Criterion")
+        _added '\b(masters[._ -]?of[._ -]?cinema|moc)\b' && diff_tokens+=("Masters of Cinema")
+        _added '\bvinegar[._ -]?syndrome\b'              && diff_tokens+=("Vinegar Syndrome")
+        _added '\bhybrid\b'                              && diff_tokens+=("Hybrid")
+        _added '\bimax\b'                                && diff_tokens+=("IMAX")
+        _added '\bopen[ ._-]?matte\b'                    && diff_tokens+=("Open Matte")
+    }
 
     # User-defined tokens — format per entry: "label:regex". Bash regex,
     # no lookaheads. Same semantics as the built-ins above: added to
@@ -403,49 +417,15 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
         fi
         [ "$grab_poster_url" = "null" ] && grab_poster_url=""
 
-        # Categorize tokens into quality/audio for separate fields
-        quality_fixed=""
-        audio_parts=()
-        for t in "${other_tokens[@]}"; do
-            case "$t" in
-                "MA WEB-DL"|"Play WEB-DL"|"WEB-DL"|"IMAX"|"Open Matte")
-                    quality_fixed="${quality_fixed:+$quality_fixed, }$t"
-                    ;;
-                "TrueHD"|"Atmos"|"DTS-X"|"DTS-HD MA")
-                    audio_parts+=("$t")
-                    ;;
-            esac
-        done
-
-        # Combine TrueHD + Atmos into the natural "TrueHD Atmos" string
-        audio_fixed=""
-        if [ "${#audio_parts[@]}" -gt 0 ]; then
-            has_truehd=false
-            has_atmos=false
-            other_audio=()
-            for a in "${audio_parts[@]}"; do
-                case "$a" in
-                    TrueHD) has_truehd=true ;;
-                    Atmos)  has_atmos=true ;;
-                    *)      other_audio+=("$a") ;;
-                esac
-            done
-            if [ "$has_truehd" = "true" ] && [ "$has_atmos" = "true" ]; then
-                audio_fixed="TrueHD Atmos"
-            elif [ "$has_truehd" = "true" ]; then
-                audio_fixed="TrueHD"
-            elif [ "$has_atmos" = "true" ]; then
-                audio_fixed="Atmos"
-            fi
-            if [ "${#other_audio[@]}" -gt 0 ]; then
-                for a in "${other_audio[@]}"; do
-                    if [ -z "$audio_fixed" ]; then
-                        audio_fixed="$a"
-                    else
-                        audio_fixed="${audio_fixed}, $a"
-                    fi
-                done
-            fi
+        # All non-group tokens go in one "Tokens Recovered" field.
+        # Source tokens (MA/Play WEB-DL), Movie Version tokens (Director's
+        # Cut / IMAX / Remaster / ...), and user-defined custom tokens
+        # share the same field — the CF-type distinction matters to Radarr's
+        # scoring, not to the human reading the Discord card.
+        tokens_recovered=""
+        if [ "${#other_tokens[@]}" -gt 0 ]; then
+            printf -v tokens_recovered '%s, ' "${other_tokens[@]}"
+            tokens_recovered="${tokens_recovered%, }"
         fi
 
         notif_title="Renamed - ${radarr_movie_title:-Unknown} (${radarr_movie_year:-?})"
@@ -466,16 +446,10 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
                 '. += [{ name: "Release Group Recovered", value: $val, inline: true }]')
         fi
 
-        if [ -n "$quality_fixed" ]; then
+        if [ -n "$tokens_recovered" ]; then
             fields_json=$(echo "$fields_json" | jq \
-                --arg val "$quality_fixed" \
-                '. += [{ name: "Quality Recovered", value: $val, inline: true }]')
-        fi
-
-        if [ -n "$audio_fixed" ]; then
-            fields_json=$(echo "$fields_json" | jq \
-                --arg val "$audio_fixed" \
-                '. += [{ name: "Audio Recovered", value: $val, inline: true }]')
+                --arg val "$tokens_recovered" \
+                '. += [{ name: "Tokens Recovered", value: $val, inline: true }]')
         fi
 
         if [ "$scene_cf_changed" = "true" ]; then
