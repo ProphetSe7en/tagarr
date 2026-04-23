@@ -94,8 +94,8 @@ See the [Migration & Auto-Update Guide](docs/tagarr-migrate-guide.md) for setup 
 
 ## Support
 
-- **Discord:** [`#prophetse7en-apps`](https://discordapp.com/channels/492590071455940612/1486391669384417300) on the [TRaSH Guides Discord](https://trash-guides.info/discord) (under Community Apps)
-- **GitHub:** [prophetse7en/tagarr/issues](https://github.com/prophetse7en/tagarr/issues)
+- **Discord:** [`#tagarr`](https://discordapp.com/channels/492590071455940612/1495686165741703229) on the [TRaSH Guides Discord](https://trash-guides.info/discord) (under Community Apps). Questions, usage help, feature discussion.
+- **GitHub issues:** [prophetse7en/tagarr/issues](https://github.com/prophetse7en/tagarr/issues) — bug reports.
 
 ## License
 
