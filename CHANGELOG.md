@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.8.1 — 2026-04-24
+
+### Fixed (tagarr_import.sh v1.6.1)
+
+- **Indexer-appended suffixes no longer end up in the qBit torrent name.** The grab-rename call used `$GRAB_TITLE` (Radarr's raw `radarr_release_title`) verbatim as the new torrent name. Some indexers append a listing ID after the release group (e.g. `-126811 x ATM05`, or an occasional `.mkv` extension) that's valid metadata in the indexer's release table but shouldn't leak into qBit. Real-world trigger: a Garfield Movie grab renamed to `...Atmos-126811 x ATM05`. The rename now keeps the title up to and including `-<RG>` and drops anything that follows. No-op for the 81/88 historical grabs where `$GRAB_TITLE` already ends cleanly on the release group.
+
+- **Retry on "Torrent not found in qBit" race.** Radarr fires the Grab event after qBit's `/torrents/add` returns `200`, but on busy qBit instances the torrent may not appear in `/torrents/info` for a second or two while qBit indexes the metadata. The script used to fail immediately with `not found in qBit (yet?) — skip`, silently losing the rename opportunity on ~1/5 of grabs per user reports. Now retries up to 6 times with `0, 1, 2, 3, 5, 5`-second backoff (total upper bound ~16s). First successful hit exits the loop — normal grabs see zero extra delay.
+
 ## v2.8.0 — 2026-04-23
 
 ### Changed (tagarr_import.sh v1.6.0) — behavioral

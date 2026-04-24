@@ -2,7 +2,7 @@
 
 # -----------------------------------------------------------------------------
 # Tagarr Import — Event-Driven Radarr Tagger with Discovery
-# Version: 1.6.0
+# Version: 1.6.1
 #
 # Radarr Connect handler that tags individual movies on import, upgrade, or
 # file delete events. Tags are based on release group, quality source
@@ -33,7 +33,7 @@
 # Test with a single movie before enabling as a Radarr Connect handler.
 # -----------------------------------------------------------------------------
 
-SCRIPT_VERSION="1.6.0"
+SCRIPT_VERSION="1.6.1"
 
 ########################################
 # CONFIG LOADING
@@ -207,11 +207,20 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
 
     log "INFO" "qBit URL: $qbit_url"
 
-    # Fetch current torrent info from qBit (case-insensitive hash)
-    qbit_info=$(curl -sS --max-time 10 "${qbit_url}/api/v2/torrents/info?hashes=${hash_lower}" 2>/dev/null)
+    # Fetch current torrent info from qBit (case-insensitive hash).
+    # Retry with backoff — Radarr fires Grab after qBit's /torrents/add
+    # returns, but qBit may still be indexing and not show the torrent
+    # in /torrents/info for up to a few seconds on busy clients. Total
+    # upper bound ~16s before give-up; first successful hit exits early.
+    qbit_info=""
+    for _delay in 0 1 2 3 5 5; do
+        [ "$_delay" -gt 0 ] && sleep "$_delay"
+        qbit_info=$(curl -sS --max-time 10 "${qbit_url}/api/v2/torrents/info?hashes=${hash_lower}" 2>/dev/null)
+        [ -n "$qbit_info" ] && [ "$qbit_info" != "[]" ] && break
+    done
 
     if [ -z "$qbit_info" ] || [ "$qbit_info" = "[]" ]; then
-        log "WARN" "Torrent $hash_lower not found in qBit (yet?) — skip"
+        log "WARN" "Torrent $hash_lower not found in qBit after retries — skip"
         exit 0
     fi
 
@@ -383,12 +392,23 @@ if [ "$EVENT_TYPE" = "Grab" ]; then
         summary_text="Cosmetic rename — no scoring impact tracked"
     fi
 
+    # Strip indexer-appended suffixes after the release group before the
+    # rename call. Some indexers append an ID tag after -<RG> (e.g.
+    # "-126811 x ATM05") that's valid in the indexer's release listing
+    # but shouldn't end up in the qBit torrent name. Keep the title up
+    # to and including -<RG>, drop anything after. No-op if RG is not
+    # found at a trailing position (final_title stays == GRAB_TITLE).
+    final_title="$GRAB_TITLE"
+    if [ -n "$GRAB_RG" ] && [[ "$GRAB_TITLE" =~ ^(.*[-]\ ?${_grab_rg_esc})([^a-zA-Z0-9].*)?$ ]]; then
+        final_title="${BASH_REMATCH[1]}"
+    fi
+
     # Execute rename
-    log "INFO" "Renaming qBit torrent to: $GRAB_TITLE"
+    log "INFO" "Renaming qBit torrent to: $final_title"
     rename_response=$(curl -sS --max-time 10 -w "\nHTTP_CODE:%{http_code}" \
         -X POST "${qbit_url}/api/v2/torrents/rename" \
         --data-urlencode "hash=${hash_lower}" \
-        --data-urlencode "name=${GRAB_TITLE}" 2>/dev/null)
+        --data-urlencode "name=${final_title}" 2>/dev/null)
 
     rename_http=$(echo "$rename_response" | grep "HTTP_CODE:" | tail -1 | cut -d: -f2)
 
