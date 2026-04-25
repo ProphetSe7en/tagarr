@@ -4,8 +4,8 @@
 
 ### Added (tagarr_import_sonarr.sh v1.1.0)
 
-- **Grab rename for Sonarr.** Mirrors the Radarr feature in `tagarr_import.sh` — renames the qBit torrent on Sonarr's Grab event so that release-group and user-defined custom tokens (typically streaming-source flags like AMZN, NF, DSNP) survive into Sonarr's import-time CF scoring. Sonarr reads the qBit torrent display name (not the file on disk) when re-evaluating Custom Formats at import; without the rename, indexer-only tokens get lost between grab and import and the CF score drops, triggering Sonarr's upgrade loop where it re-grabs the same release. Real-world trigger from a user report: `Family Guy S13 1080p AMZN WEB-DL DD 5.1 H.264-CtrlHD` (1785) downloads as `Family.Guy.S13E01.The.Simpsons.Guy.1080p.WEB-DL.DD5.1.H.264-CtrlHD.mkv` (1710) — the AMZN flag is missing from the filename, the +75 CF score evaporates on import, Sonarr keeps re-grabbing.
-- **AMZN and NF uncommented by default** in `tagarr_import_sonarr.conf.sample` — these two services dominate user reports of the scoring loop. All 17 other streaming services from TRaSH's `[Streaming Services] General` group are available as ready-to-uncomment entries.
+- **Grab rename for Sonarr.** Mirrors the Radarr feature in `tagarr_import.sh` — renames the qBit torrent on Sonarr's Grab event so that release-group and user-defined custom tokens (typically streaming-source flags like AMZN, NF, DSNP) survive into Sonarr's import-time CF scoring. Sonarr reads the qBit torrent display name (not the file on disk) when re-evaluating Custom Formats at import; without the rename, indexer-only tokens get lost between grab and import and the CF score drops, triggering Sonarr's upgrade loop where it re-grabs the same release. Real-world example: `Family Guy S13 1080p AMZN WEB-DL DD 5.1 H.264-CtrlHD` (1785) downloads as `Family.Guy.S13E01.The.Simpsons.Guy.1080p.WEB-DL.DD5.1.H.264-CtrlHD.mkv` (1710) — the AMZN flag is missing from the filename, the +75 CF score evaporates on import, Sonarr keeps re-grabbing.
+- **AMZN and NF uncommented by default** in `tagarr_import_sonarr.conf.sample` — common starting point for the streaming-source case. The 17 other streaming services from TRaSH's `[Streaming Services] General` group are available as ready-to-uncomment entries.
 - **`GRAB_RENAME_CUSTOM_TOKENS` for user-defined recovery patterns.** Each entry is `label:regex`. The script triggers a rename when the regex matches the indexer's release title but not the qBit torrent name. Bash extended regex (POSIX ERE — no lookahead/lookbehind), so the shipped streaming-service patterns are simplified from TRaSH's Perl-compatible originals. For streaming flags this is safe — a too-broad regex causes false negatives, not wrong renames, since the script only acts on grab-has-it-but-current-doesnt.
 - **`QBIT_CLIENTS` config in Sonarr sample** — same syntax as Radarr (`name:url`), required when `ENABLE_GRAB_RENAME=true`.
 
@@ -20,7 +20,7 @@
 
 ### Notes
 
-- Grab rename for Sonarr is **untested** at release time — the Radarr equivalent has been running in production for months, but Sonarr-side feedback is requested. If you enable this and see anything unexpected, open an issue or drop a note in the Discord channel.
+- Grab rename for Sonarr is **untested** at release time — the Radarr version has been running in my own setup for a while, but the Sonarr port hasn't been tested against live Sonarr Grab events yet. Feedback welcome — open an issue or drop a note in the Discord channel.
 
 ## v2.8.1 — 2026-04-24
 
@@ -28,7 +28,7 @@
 
 - **Indexer-appended suffixes no longer end up in the qBit torrent name.** The grab-rename call used `$GRAB_TITLE` (Radarr's raw `radarr_release_title`) verbatim as the new torrent name. Some indexers append a listing ID after the release group (e.g. `-126811 x ATM05`, or an occasional `.mkv` extension) that's valid metadata in the indexer's release table but shouldn't leak into qBit. Real-world trigger: a Garfield Movie grab renamed to `...Atmos-126811 x ATM05`. The rename now keeps the title up to and including `-<RG>` and drops anything that follows. No-op for the 81/88 historical grabs where `$GRAB_TITLE` already ends cleanly on the release group.
 
-- **Retry on "Torrent not found in qBit" race.** Radarr fires the Grab event after qBit's `/torrents/add` returns `200`, but on busy qBit instances the torrent may not appear in `/torrents/info` for a second or two while qBit indexes the metadata. The script used to fail immediately with `not found in qBit (yet?) — skip`, silently losing the rename opportunity on ~1/5 of grabs per user reports. Now retries up to 6 times with `0, 1, 2, 3, 5, 5`-second backoff (total upper bound ~16s). First successful hit exits the loop — normal grabs see zero extra delay.
+- **Retry on "Torrent not found in qBit" race.** Radarr fires the Grab event after qBit's `/torrents/add` returns `200`, but on busy qBit instances the torrent may not appear in `/torrents/info` for a second or two while qBit indexes the metadata. The script used to fail immediately with `not found in qBit (yet?) — skip`, silently losing the rename opportunity on a portion of grabs (one observation: roughly 1 in 5). Now retries up to 6 times with `0, 1, 2, 3, 5, 5`-second backoff (total upper bound ~16s). First successful hit exits the loop — normal grabs see zero extra delay.
 
 ## v2.8.0 — 2026-04-23
 

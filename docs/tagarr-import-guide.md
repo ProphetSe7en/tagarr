@@ -110,7 +110,7 @@ This is a direct download ID match — no walking through history, no title/year
 
 The release-group loop above is the most common cause of "Sonarr keeps re-grabbing the same episode." But there's a second variant that release-group recovery alone doesn't solve: the **streaming-source flag** going missing between the indexer's release name and the actual filename.
 
-**Real example reported by a user:**
+**Real-world example:**
 - Indexer title: `Family Guy S13 1080p AMZN WEB-DL DD 5.1 H.264-CtrlHD` ← scores 1785
 - Filename:      `Family.Guy.S13E01.The.Simpsons.Guy.1080p.WEB-DL.DD5.1.H.264-CtrlHD.mkv` ← scores 1710
 
@@ -625,7 +625,7 @@ GRAB_RENAME_CUSTOM_TOKENS=(
 
 Each line is `Label:regex`. The script triggers a rename if the regex matches in the indexer's release title but **not** in the qBit torrent name. The label is what shows up in the Discord notification; the regex is bash-extended (no lookaheads).
 
-**The config sample ships AMZN and NF uncommented by default** — these are the two streaming services that have appeared in user reports of the scoring loop most often, so they work out of the box once `ENABLE_GRAB_RENAME=true`.
+**The config sample ships AMZN and NF uncommented by default** — common starting points for the streaming-source case. They work out of the box once `ENABLE_GRAB_RENAME=true`.
 
 **Other services available as ready-to-uncomment entries:** ATV, ATVP, CC, DCU, DSNP, HBO, HMAX, HULU, iT, PCOK, PMTP, ROKU, SHO, STAN, SYFY. Uncomment only the ones your scoring chain actually rewards (check Sonarr > Settings > Custom Formats — anything with a positive score is a candidate). The regex patterns are simplified from TRaSH's CF specifications — TRaSH uses Perl-compatible regex with lookahead/lookbehind (e.g. "MAX but not preceded by HBO") that bash `grep -E` does not support. For streaming flags the simplifications are usually safe (a too-broad regex causes false negatives, never wrong renames, since the script only renames when the token is in the indexer title but missing from the qBit torrent name).
 

@@ -104,9 +104,8 @@ QBIT_CLIENTS=(
 # false-negatives rather than wrong renames). Verify against your own
 # scoring chain if you customize.
 #
-# Two pre-uncommented examples (AMZN and NF) — the most common in
-# user reports of the scoring loop. Uncomment additional services
-# below if your CF set rewards them.
+# AMZN and NF are pre-uncommented as common starting points.
+# Uncomment additional services below if your CF set rewards them.
 GRAB_RENAME_CUSTOM_TOKENS=(
     "AMZN:\\b(amzn|amazon(hd)?)\\b"
     "NF:\\b(nf|netflix(u?hd)?)\\b"
