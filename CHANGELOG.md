@@ -1,5 +1,27 @@
 # Changelog
 
+## v2.9.0 — 2026-04-25
+
+### Added (tagarr_import_sonarr.sh v1.1.0)
+
+- **Grab rename for Sonarr.** Mirrors the Radarr feature in `tagarr_import.sh` — renames the qBit torrent on Sonarr's Grab event so that release-group and user-defined custom tokens (typically streaming-source flags like AMZN, NF, DSNP) survive into Sonarr's import-time CF scoring. Sonarr reads the qBit torrent display name (not the file on disk) when re-evaluating Custom Formats at import; without the rename, indexer-only tokens get lost between grab and import and the CF score drops, triggering Sonarr's upgrade loop where it re-grabs the same release. Real-world trigger from a user report: `Family Guy S13 1080p AMZN WEB-DL DD 5.1 H.264-CtrlHD` (1785) downloads as `Family.Guy.S13E01.The.Simpsons.Guy.1080p.WEB-DL.DD5.1.H.264-CtrlHD.mkv` (1710) — the AMZN flag is missing from the filename, the +75 CF score evaporates on import, Sonarr keeps re-grabbing.
+- **AMZN and NF uncommented by default** in `tagarr_import_sonarr.conf.sample` — these two services dominate user reports of the scoring loop. All 17 other streaming services from TRaSH's `[Streaming Services] General` group are available as ready-to-uncomment entries.
+- **`GRAB_RENAME_CUSTOM_TOKENS` for user-defined recovery patterns.** Each entry is `label:regex`. The script triggers a rename when the regex matches the indexer's release title but not the qBit torrent name. Bash extended regex (POSIX ERE — no lookahead/lookbehind), so the shipped streaming-service patterns are simplified from TRaSH's Perl-compatible originals. For streaming flags this is safe — a too-broad regex causes false negatives, not wrong renames, since the script only acts on grab-has-it-but-current-doesnt.
+- **`QBIT_CLIENTS` config in Sonarr sample** — same syntax as Radarr (`name:url`), required when `ENABLE_GRAB_RENAME=true`.
+
+### Carried over from v2.8.1 (now in both scripts)
+
+- Strip indexer-appended suffixes after `-<RG>` before the qBit rename API call (handles `-126811 x ATM05`-class indexer cruft).
+- Retry `qBit /torrents/info` lookup with `0,1,2,3,5,5s` backoff to handle the busy-qBit indexing race that produced ~1/5 "Torrent not found in qBit (yet?)" failures.
+
+### Changed (tagarr_import_sonarr.conf.sample)
+
+- **Config version bumped 1.0 → 1.1.** `tagarr_migrate.sh` adds the new `ENABLE_GRAB_RENAME`, `QBIT_CLIENTS`, and `GRAB_RENAME_CUSTOM_TOKENS` sections automatically on next migration run; existing `ENABLE_RECOVER`, `ENABLE_RENAME`, and Discord settings are preserved.
+
+### Notes
+
+- Grab rename for Sonarr is **untested** at release time — the Radarr equivalent has been running in production for months, but Sonarr-side feedback is requested. If you enable this and see anything unexpected, open an issue or drop a note in the Discord channel.
+
 ## v2.8.1 — 2026-04-24
 
 ### Fixed (tagarr_import.sh v1.6.1)

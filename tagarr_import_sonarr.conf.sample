@@ -1,22 +1,23 @@
 # ========== CONFIGURATION ==========
-# Config version: 1.0
-# Config for tagarr_import_sonarr.sh — Release Group Recovery on Import
+# Config version: 1.1
+# Config for tagarr_import_sonarr.sh — Release Group Recovery + Grab-Rename
 #
-# This script runs as a Sonarr Connect handler (On Download).
-# When an episode arrives with an empty or unknown release group, it looks
-# up the grab history using the download ID and patches the episodefile
-# with the correct release group from the grab event.
+# Runs as a Sonarr Connect handler. Wire up "On Grab" + "On Import" +
+# "On Upgrade" events in Sonarr > Settings > Connect > Custom Script.
 #
-# This fixes the scoring loop where some trackers use different names for
-# the torrent vs the file — Sonarr grabs based on the torrent name (with
-# release group), but the file doesn't include it, causing Custom Format
-# scores to drop and Sonarr to grab again.
+# Two recovery paths:
+#   1. GRAB (qBit torrent rename, before download finishes) — adds release
+#      group + user-defined tokens (e.g. AMZN, NF, DSNP) to the qBit
+#      torrent name so they survive into Sonarr's import-time CF scoring.
+#   2. IMPORT/UPGRADE (release group recovery via downloadId) — when an
+#      episode imports with empty/unknown release group, looks up the
+#      grab history and patches the episodefile.
 #
 # Notification behavior:
-#   - Release group recovered → Discord embed (green) with series/episode info
-#   - Already has group       → Silent (no notification)
-#   - Cannot recover          → Silent (no notification)
-#   - Test event              → Confirmation embed with version and status
+#   - Tokens recovered (Grab)    → Discord embed (orange) with details
+#   - Release group recovered    → Discord embed (green) with series info
+#   - Already has group / cosmetic → Silent (no notification)
+#   - Test event                 → Confirmation embed
 #
 # See README.md for setup instructions.
 
@@ -45,6 +46,93 @@ ENABLE_RENAME=true
 # original grab event. The script looks up the grab by this ID to find
 # the release group — no guessing, no walking through old history.
 ENABLE_RECOVER=true
+
+# === GRAB-RENAME (qBit torrent rename, runs on Sonarr Grab event) ===
+# When enabled, the script renames the qBit torrent on grab so that
+# tokens present in the indexer's release title — but missing from the
+# qBit torrent name — make it into Sonarr's import-time CF scoring.
+#
+# Sonarr reads the qBit torrent display name (not the file on disk) for
+# CF re-evaluation at import. So if your indexer titles include source
+# flags like AMZN/NF/DSNP but the actual filename strips them, the
+# matching CFs (e.g. TRaSH "AMZN" CF, +75) score zero on import — the
+# release loops as Sonarr keeps re-grabbing the higher-scoring version.
+#
+# What gets recovered:
+#   - Release group is automatic — if the qBit name lacks `-<RG>` it's
+#     appended.
+#   - Custom tokens are user-defined below in GRAB_RENAME_CUSTOM_TOKENS.
+#     Default is empty — you only chase tokens you actually score.
+#
+# This is OFF by default. Enable only after configuring QBIT_CLIENTS.
+ENABLE_GRAB_RENAME=false
+
+# === QBIT_CLIENTS — required when ENABLE_GRAB_RENAME=true ===
+# Maps the download client name from Sonarr to the qBit Web UI URL.
+#
+# 1. Open Sonarr > Settings > Download Clients > your qBit entry.
+# 2. Find the "Name" field at the top (e.g. "qBittorrent" or "qBit-tv").
+# 3. Use that exact name on the left side of the colon below.
+# 4. Put the qBit Web UI URL (host:port) on the right.
+#
+# Single-client setup: even if the name doesn't match, the script falls
+# back to the only entry. Multi-client setups MUST have names match.
+#
+# Qui proxy users: the URL format is
+# http://qui:7476/proxy/<your-32-char-client-id>
+QBIT_CLIENTS=(
+    "qBittorrent:http://localhost:8080"
+)
+
+# === GRAB_RENAME_CUSTOM_TOKENS — user-defined recovery tokens ===
+# Each entry is "Label:regex". The script triggers a rename if the regex
+# matches in the indexer's release title but NOT in the qBit torrent
+# name. Label is what appears in the Discord notification; regex is
+# bash-extended (POSIX ERE — no lookahead/lookbehind).
+#
+# Common Sonarr use case: streaming-source flags. The TRaSH `[Streaming
+# Services] General` CF group matches these from the release title — if
+# the filename strips them, the CF score evaporates on import.
+#
+# About the examples below: the regex patterns are simplified versions
+# of TRaSH's CF specifications. TRaSH uses Perl-compatible regex with
+# lookahead/lookbehind constructs (e.g. "MAX but not preceded by HBO")
+# that bash grep -E does not support. The simplifications below trade
+# precision for compatibility — for streaming flags this is usually
+# safe, since the script only renames when the token is in the indexer
+# title but missing from the file name (so a too-broad regex causes
+# false-negatives rather than wrong renames). Verify against your own
+# scoring chain if you customize.
+#
+# Two pre-uncommented examples (AMZN and NF) — the most common in
+# user reports of the scoring loop. Uncomment additional services
+# below if your CF set rewards them.
+GRAB_RENAME_CUSTOM_TOKENS=(
+    "AMZN:\\b(amzn|amazon(hd)?)\\b"
+    "NF:\\b(nf|netflix(u?hd)?)\\b"
+
+    # Other streaming services from TRaSH's [Streaming Services] General
+    # group. Uncomment the ones your CFs use:
+    # "ATV:\\b(atv|appletv)\\b"
+    # "ATVP:\\b(atvp|aptv|Apple TV\\+)\\b"
+    # "CC:\\bcc\\b"
+    # "DCU:\\b(dcu|DC Universe)\\b"
+    # "DSNP:\\b(dsnp|dsny|disney|Disney\\+)\\b"
+    # "HBO:\\bhbo\\b"
+    # "HMAX:\\b(hmax|hbom|hbo[ ._-]?max)\\b"
+    # "HULU:\\bhulu\\b"
+    # "iT:\\b(it|itunes)\\b"
+    # "PCOK:\\b(pcok|Peacock TV)\\b"
+    # "PMTP:\\b(pmtp|Paramount\\+)\\b"
+    # "ROKU:\\broku\\b"
+    # "SHO:\\b(sho|showtime)\\b"
+    # "STAN:\\bstan\\b"
+    # "SYFY:\\bsyfy\\b"
+
+    # MAX and PLAY are intentionally omitted — too generic on their own
+    # without lookbehind/lookahead support. Add a stricter variant if
+    # needed, e.g. "MAX:\\bmax[ ._-]web[ ._-]?(dl|rip)\\b"
+)
 
 # === DISCORD NOTIFICATIONS ===
 # Send per-episode notifications when a release group is recovered.

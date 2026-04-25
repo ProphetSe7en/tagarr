@@ -2,8 +2,8 @@
 
 Complete guide for the two Connect handler scripts:
 
-- **`tagarr_import.sh`** — Radarr Connect (tagging + recovery + discovery)
-- **`tagarr_import_sonarr.sh`** — Sonarr Connect (recovery only)
+- **`tagarr_import.sh`** — Radarr Connect (tagging + recovery + discovery + grab rename)
+- **`tagarr_import_sonarr.sh`** — Sonarr Connect (recovery + grab rename)
 
 These scripts run automatically every time a movie or episode is imported. For the batch scanner, see [tagarr-guide.md](tagarr-guide.md). For the batch recovery tool, see [tagarr-recover-guide.md](tagarr-recover-guide.md).
 
@@ -47,13 +47,13 @@ It also handles file deletion events by removing all managed tags from the movie
 
 ### tagarr_import_sonarr.sh (Sonarr)
 
-Recovers missing release groups the moment an episode is imported. When the release group is missing from the file, the script looks it up in grab history, patches it onto the episode, and renames the file so the group is permanently part of the filename. This ensures:
+Two things, both aimed at keeping Custom Format scores correct so Sonarr stops re-grabbing the same release over and over:
 
-- **Custom Format scores stay correct** — CFs that match by release group keep scoring after import
-- **No upgrade loops** — Sonarr won't re-grab the same release because the score dropped
-- **The fix is permanent** — the group is in the filename, surviving rescans and restarts
+**1. Recovers missing release groups on import.** When an episode arrives with the release group missing from the filename, the script looks it up in grab history, patches it into the episode record, and renames the file so the group is permanently part of the filename.
 
-No tagging, no discovery, no filters — the Sonarr script is focused entirely on making sure every episode has the correct release group.
+**2. Renames the qBit torrent on grab to keep streaming-source flags (and the release group) visible.** This is the new piece in v1.1.0 — see the next section for what it solves and when to enable it.
+
+No tagging, no discovery, no filters — the Sonarr script is focused on getting the right tokens into the right places so Sonarr doesn't re-grab the same release over and over.
 
 ---
 
@@ -103,6 +103,29 @@ The rename step is critical — it makes the fix **permanent**. Without rename, 
 This is a direct download ID match — no walking through history, no title/year verification, no safety chain. It's simpler and more reliable than the batch recovery because the download ID comes directly from the event, guaranteeing an exact match.
 
 **What if recovery fails?** The script continues silently. A missing release group isn't fatal — the movie/episode is imported normally, just without the group. The batch recovery script (`tagarr_recover.sh`) can pick it up later.
+
+---
+
+## The Streaming-Source Loop (Sonarr) — fixed by Grab Rename
+
+The release-group loop above is the most common cause of "Sonarr keeps re-grabbing the same episode." But there's a second variant that release-group recovery alone doesn't solve: the **streaming-source flag** going missing between the indexer's release name and the actual filename.
+
+**Real example reported by a user:**
+- Indexer title: `Family Guy S13 1080p AMZN WEB-DL DD 5.1 H.264-CtrlHD` ← scores 1785
+- Filename:      `Family.Guy.S13E01.The.Simpsons.Guy.1080p.WEB-DL.DD5.1.H.264-CtrlHD.mkv` ← scores 1710
+
+The release group `CtrlHD` is in both, so release-group recovery wouldn't change anything. The 75-point difference comes from the **AMZN** flag — the indexer says it's an Amazon source (which the TRaSH "AMZN" Custom Format scores +75), but Amazon isn't part of the actual filename. On import, Sonarr re-evaluates Custom Formats against the filename, the AMZN CF doesn't fire, the score drops by 75, and Sonarr keeps trying to grab a higher-scoring release that doesn't exist.
+
+`tagarr_import_sonarr.sh` v1.1.0 fixes this by **renaming the qBit torrent** — not the file on disk, just the display name qBit shows — so the indexer-only tokens are present when Sonarr reads the torrent name on import. The file inside the torrent is untouched; cross-seed hardlinks are safe.
+
+What it can recover:
+- **Release group** — automatic. If the qBit torrent name lacks `-<GROUP>`, it's appended.
+- **Streaming source flags (AMZN, NF, DSNP, MAX, ATVP, ...)** — only the ones you list yourself in `GRAB_RENAME_CUSTOM_TOKENS`. The config sample ships ready-to-uncomment entries for all 19 streaming services in TRaSH's `[Streaming Services] General` group. Uncomment the ones whose CFs you actually use.
+- **Anything else you score by release-title regex** — the `GRAB_RENAME_CUSTOM_TOKENS` list is your escape hatch for any TRaSH or custom CF where the file naming strips the trigger token.
+
+Anything that comes from MediaInfo (resolution, codec, HDR/HDR10+/DV, audio format, channel count) is read by Sonarr directly from the file at import time, so renaming the torrent for those is pointless — leave them out.
+
+The grab rename is **off by default**. Enable only after configuring `QBIT_CLIENTS` (see the Sonarr config reference below). It needs the qBit Web UI URL because that's how the rename is sent.
 
 ---
 
@@ -223,17 +246,17 @@ Unlike the batch script where you run discovery periodically, the import script 
 3. In Sonarr: **Settings > Connect > + > Custom Script**
    - Name: `Tagarr Import Sonarr`
    - Path: full path to `tagarr_import_sonarr.sh`
-   - Events: **On File Import** and **On Upgrade**
+   - Events: **On Grab**, **On File Import**, **On Upgrade** (see table below for what each one does)
 4. Click **Test** — you should see a test notification in the log (and Discord if enabled)
 
 **Which events to enable and why:**
 
 | Event | Enable | Purpose |
 |-------|--------|---------|
+| **On Grab** | Yes — required for grab rename | Fires the moment Sonarr sends a torrent to qBit, before the download finishes. The script renames the qBit torrent to recover release-group and any streaming-source flags you list in `GRAB_RENAME_CUSTOM_TOKENS`. Only does something when `ENABLE_GRAB_RENAME=true` in the config; safe to wire up even if you haven't enabled grab rename yet (script exits silently in that case). |
 | **On File Import** | Yes | Fires after Sonarr imports a new episode file. All per-file metadata is available: episode file ID, release group, quality, scene name. Works for both single episodes and season packs (fires once per episode). |
 | **On Upgrade** | Yes | Fires after Sonarr replaces a file with a better version. Same per-file metadata as On File Import, with `sonarr_isupgrade=True` and `sonarr_deletedpaths` showing the old file. Required for both single episode upgrades and season pack upgrades. Without this, upgrades are silently ignored. |
 | **On Import Complete** | No | Fires after all files from a download batch are imported. Uses plural variable names (`sonarr_episodefile_ids`, `sonarr_episodefile_releasegroups`) instead of the singular forms the script expects. Would cause the script to see an empty release group and trigger unnecessary recovery. |
-| **On Grab** | No | Grab Rename is only implemented for Radarr (`tagarr_import.sh`). The Sonarr script does not have this feature. |
 
 **Docker users:** These scripts run inside the Radarr/Sonarr container's filesystem. The script path in Connect must point to a location inside the container, not on the host. Mount the scripts directory as a read-only volume:
 
@@ -545,7 +568,81 @@ ENABLE_RECOVER=true
 
 | Option | Description |
 |--------|-------------|
-| `ENABLE_RECOVER` | When `true`, the script attempts to recover missing release groups on every import. This is the core feature of the script — if you set this to `false`, the script effectively does nothing. The recovery uses the download ID from the Sonarr Connect event to find the exact grab, extract the release group, and patch it onto the episode file. |
+| `ENABLE_RECOVER` | When `true`, the script attempts to recover missing release groups on every import. This is one of the two core features of the script — if you set this to `false`, the import-time recovery is skipped. The recovery uses the download ID from the Sonarr Connect event to find the exact grab, extract the release group, and patch it onto the episode file. |
+
+### Grab Rename
+
+```bash
+ENABLE_GRAB_RENAME=false
+```
+
+| Option | Description |
+|--------|-------------|
+| `ENABLE_GRAB_RENAME` | When `true`, the script renames the qBit torrent on Sonarr's Grab event so that release-group and any custom tokens you list in `GRAB_RENAME_CUSTOM_TOKENS` end up in the torrent display name. Sonarr reads that display name on import for Custom Format scoring — without this, indexer-only tokens (like AMZN/NF/DSNP source flags) get lost between grab and import, and CF scores drop. Off by default — enable only after you've set up `QBIT_CLIENTS` below. |
+
+**What gets renamed:** Only the qBit torrent's display name (the title qBit shows in its UI and reports via API). The actual files inside the torrent are untouched, so cross-seed hardlinks remain intact.
+
+**When to enable:** When you've seen Sonarr re-grab the same release multiple times despite the file already being there, **and** the grab title has tokens (like `AMZN`, `NF`) that aren't in the filename. Run the script for a few days with `ENABLE_GRAB_RENAME=false` first and watch the logs to confirm the issue is happening.
+
+### QBIT_CLIENTS Setup
+
+```bash
+QBIT_CLIENTS=(
+    "qBittorrent:http://localhost:8080"
+)
+```
+
+Maps the **download client name from Sonarr** to the **qBit Web UI URL**. Required when `ENABLE_GRAB_RENAME=true`.
+
+**How to fill this in:**
+
+1. Open **Sonarr > Settings > Download Clients** and click on your qBit entry.
+2. Find the **Name** field at the top of the dialog (e.g. `qBittorrent`, `qBit-tv`).
+3. Use that exact name on the **left** side of the colon below.
+4. Put the qBit Web UI URL (host:port) on the **right** side.
+
+**Concrete example:** If Sonarr's download client is named `qBit-tv` and qBit's Web UI is at `192.168.1.10:8080`:
+
+```bash
+QBIT_CLIENTS=(
+    "qBit-tv:http://192.168.1.10:8080"
+)
+```
+
+**Single-client setup:** If you only have one qBit instance, the name doesn't have to match — the script falls back to the only entry with an info-log notice. Multi-client setups (e.g. one qBit for movies, another for TV) **must** have the names match exactly.
+
+**Qui proxy users:** The URL format is `http://qui:7476/proxy/<your-32-char-client-id>`. Find your client ID in Qui's settings (it's the API path the dashboard uses internally).
+
+### GRAB_RENAME_CUSTOM_TOKENS
+
+```bash
+GRAB_RENAME_CUSTOM_TOKENS=(
+    # "AMZN:\\b(amzn|amazon(hd)?)\\b"
+    # "NF:\\b(nf|netflix)\\b"
+    # ...
+)
+```
+
+Each line is `Label:regex`. The script triggers a rename if the regex matches in the indexer's release title but **not** in the qBit torrent name. The label is what shows up in the Discord notification; the regex is bash-extended (no lookaheads).
+
+**The config sample ships AMZN and NF uncommented by default** — these are the two streaming services that have appeared in user reports of the scoring loop most often, so they work out of the box once `ENABLE_GRAB_RENAME=true`.
+
+**Other services available as ready-to-uncomment entries:** ATV, ATVP, CC, DCU, DSNP, HBO, HMAX, HULU, iT, PCOK, PMTP, ROKU, SHO, STAN, SYFY. Uncomment only the ones your scoring chain actually rewards (check Sonarr > Settings > Custom Formats — anything with a positive score is a candidate). The regex patterns are simplified from TRaSH's CF specifications — TRaSH uses Perl-compatible regex with lookahead/lookbehind (e.g. "MAX but not preceded by HBO") that bash `grep -E` does not support. For streaming flags the simplifications are usually safe (a too-broad regex causes false negatives, never wrong renames, since the script only renames when the token is in the indexer title but missing from the qBit torrent name).
+
+**MAX and PLAY are intentionally NOT in the sample** — both words are too generic on their own without lookbehind/lookahead. Add a stricter variant if you need them, e.g. `"MAX:\\bmax[ ._-]web[ ._-]?(dl|rip)\\b"`.
+
+**Adding your own:**
+
+```bash
+GRAB_RENAME_CUSTOM_TOKENS=(
+    "AMZN:\\b(amzn|amazon(hd)?)\\b"
+    "MyTracker:\\bMYTRK\\b"
+)
+```
+
+The regex match is case-insensitive. Word boundaries (`\b`) recommended to avoid false positives — `\\bnf\\b` matches `NF` but not `Netflix.snff`.
+
+**What NOT to put here:** anything Sonarr can read from the file directly — resolution, codec, HDR variants, audio format, channel count. Those CFs match against MediaInfo, not the release title, so renaming the torrent for them is pointless.
 
 ### Discord Notifications
 
@@ -591,6 +688,7 @@ LOG_FILE="${SCRIPT_DIR}/logs/tagarr_import_sonarr.log"
 | Event | What Happens |
 |-------|-------------|
 | **Test** | Verifies the script works, sends test notification to Discord if enabled, exits. |
+| **Grab** | Runs the grab rename pipeline: looks up the torrent in qBit (with retry — qBit may take a second or two to index a freshly added torrent), figures out which tokens are missing from the torrent name compared to the indexer's release title, and renames the torrent if anything's missing. Off-by-default — needs `ENABLE_GRAB_RENAME=true` and `QBIT_CLIENTS` configured. Files on disk are not touched. |
 | **File Import** | The script checks if the episode has a release group (from event env var → API → grab history recovery). If recovery was needed and successful, triggers a rename and sends Discord notification. Sonarr uses this same event for both new downloads and upgrades — when it's an upgrade, `sonarr_deletedpaths` contains the old file that was replaced. |
 | All other events | Ignored — the script exits immediately. |
 

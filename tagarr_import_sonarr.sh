@@ -1,22 +1,21 @@
 #!/usr/bin/env bash
 # -----------------------------------------------------------------------------
-# Tagarr Import Sonarr — Release Group Recovery on Import
-# Version: 1.0.0
+# Tagarr Import Sonarr — Release Group Recovery + Grab-Rename
+# Version: 1.1.0
 #
-# Sonarr Connect handler that recovers missing release groups on import
-# and upgrade events. When an episode arrives with an empty/unknown release
-# group, the script looks up the grab history using the download ID and
-# patches the episodefile with the correct group.
-#
-# This solves the scoring loop problem where some trackers use different
-# names for the torrent vs the actual file — Sonarr grabs based on the
-# torrent name (with release group), but the file doesn't include it,
-# causing CF scores to drop and Sonarr to grab again.
+# Sonarr Connect handler that:
+#   1. On Grab — renames the qBit torrent to recover release-group + any
+#      user-defined custom tokens (e.g. streaming source flags like AMZN,
+#      NF, DSNP) before Sonarr imports the file. Solves the scoring loop
+#      where the indexer's release title carries tokens that the actual
+#      filename doesn't, causing CF score to drop on import.
+#   2. On Import/Upgrade — recovers missing release groups by looking up
+#      the grab history via downloadId and patching the episodefile.
 #
 # Setup:
 #   Sonarr > Settings > Connect > Custom Script
 #   Path: /scripts/tagarr_import_sonarr.sh
-#   Events: On File Import, On Upgrade
+#   Events: On Grab, On File Import, On Upgrade
 #
 # Configuration: tagarr_import_sonarr.conf
 #
@@ -26,7 +25,7 @@
 # Test with a single episode before enabling as a Sonarr Connect handler.
 # -----------------------------------------------------------------------------
 
-SCRIPT_VERSION="1.0.0"
+SCRIPT_VERSION="1.1.0"
 
 ########################################
 # CONFIG LOADING
@@ -153,6 +152,269 @@ if [ "$EVENT_TYPE" = "Test" ]; then
     fi
 
     log "INFO" "Script completed successfully"
+    exit 0
+fi
+
+################################################################################
+# HANDLE SONARR GRAB EVENT — qBit torrent rename
+#
+# Recovers tokens that exist in the indexer's release title but aren't
+# in the qBit torrent name (which Sonarr reads at import time for CF
+# scoring). Runs before download finishes — pure metadata change in
+# qBit, files on disk are untouched.
+#
+# Two recovery paths:
+#   1. Release group — automatic. If -<RG> is missing from the qBit
+#      torrent name, append it.
+#   2. User-defined tokens — only triggered when GRAB_RENAME_CUSTOM_TOKENS
+#      contains entries. Each entry is "label:regex". Common case is
+#      streaming source flags (AMZN, NF, DSNP, etc.) which TRaSH CFs
+#      score from the release title — see tagarr_import_sonarr.conf
+#      sample for ready-to-use examples.
+#
+# Sonarr-specific scope: no built-in source/audio/movie-version detection.
+# Episode-grab use cases are diverse (multi-episode, season packs, anime
+# variants); user-defined tokens keep the default surface minimal and
+# users add only what their CF set needs.
+################################################################################
+
+if [ "$EVENT_TYPE" = "Grab" ]; then
+    log "INFO" "============================================"
+    log "INFO" "Tagarr Import Sonarr v${SCRIPT_VERSION}"
+    log "INFO" "Event: Grab"
+    log "INFO" "============================================"
+
+    # Feature toggle (default off — must be explicitly enabled in config)
+    if [ "${ENABLE_GRAB_RENAME:-false}" != "true" ]; then
+        log "INFO" "ENABLE_GRAB_RENAME is not true — skipping"
+        exit 0
+    fi
+
+    GRAB_RG="${sonarr_release_releasegroup:-}"
+    GRAB_TITLE="${sonarr_release_title:-}"
+    GRAB_HASH="${sonarr_download_id:-}"
+    GRAB_CLIENT="${sonarr_download_client:-}"
+
+    if [ -z "$GRAB_TITLE" ] || [ -z "$GRAB_HASH" ] || [ -z "$GRAB_CLIENT" ]; then
+        log "WARN" "Missing required env vars (title='$GRAB_TITLE' hash='$GRAB_HASH' client='$GRAB_CLIENT') — skip"
+        exit 0
+    fi
+
+    log "INFO" "Series:  ${sonarr_series_title:-?} (${sonarr_series_year:-?})"
+    log "INFO" "Release: $GRAB_TITLE"
+    log "INFO" "Group:   $GRAB_RG"
+    log "INFO" "Client:  $GRAB_CLIENT"
+    log "INFO" "Hash:    $GRAB_HASH"
+
+    # Map download client name to qBit URL (case-insensitive match)
+    hash_lower="${GRAB_HASH,,}"
+
+    if [ "${#QBIT_CLIENTS[@]}" -eq 0 ]; then
+        log "WARN" "QBIT_CLIENTS is empty or unset — skip"
+        exit 0
+    fi
+
+    qbit_url=""
+    grab_client_lower="${GRAB_CLIENT,,}"
+    for entry in "${QBIT_CLIENTS[@]}"; do
+        client_name="${entry%%:*}"
+        client_url="${entry#*:}"
+        if [ "${client_name,,}" = "$grab_client_lower" ]; then
+            qbit_url="$client_url"
+            break
+        fi
+    done
+
+    if [ -z "$qbit_url" ]; then
+        if [ "${#QBIT_CLIENTS[@]}" -eq 1 ]; then
+            qbit_url="${QBIT_CLIENTS[0]#*:}"
+            log "INFO" "Client '$GRAB_CLIENT' not in QBIT_CLIENTS but only one entry configured — using ${qbit_url}"
+        else
+            log "WARN" "Download client '$GRAB_CLIENT' not in QBIT_CLIENTS map (${#QBIT_CLIENTS[@]} entries) — skip"
+            exit 0
+        fi
+    fi
+
+    log "INFO" "qBit URL: $qbit_url"
+
+    # Fetch current torrent info from qBit (case-insensitive hash).
+    # Retry with backoff — Sonarr fires Grab after qBit's /torrents/add
+    # returns, but qBit may still be indexing and not show the torrent
+    # in /torrents/info for up to a few seconds on busy clients. Total
+    # upper bound ~16s before give-up; first successful hit exits early.
+    qbit_info=""
+    for _delay in 0 1 2 3 5 5; do
+        [ "$_delay" -gt 0 ] && sleep "$_delay"
+        qbit_info=$(curl -sS --max-time 10 "${qbit_url}/api/v2/torrents/info?hashes=${hash_lower}" 2>/dev/null)
+        [ -n "$qbit_info" ] && [ "$qbit_info" != "[]" ] && break
+    done
+
+    if [ -z "$qbit_info" ] || [ "$qbit_info" = "[]" ]; then
+        log "WARN" "Torrent $hash_lower not found in qBit after retries — skip"
+        exit 0
+    fi
+
+    current_name=$(echo "$qbit_info" | jq -r '.[0].name // ""' 2>/dev/null)
+    if [ -z "$current_name" ]; then
+        log "WARN" "Could not parse qBit torrent name — skip"
+        exit 0
+    fi
+
+    log "INFO" "Current torrent name: $current_name"
+
+    # Idempotent: if name is already exactly the grab title, skip
+    if [ "$current_name" = "$GRAB_TITLE" ]; then
+        log "INFO" "Torrent name already equals grab title — no rename needed"
+        exit 0
+    fi
+
+    # Helper: returns true if grab has the pattern but qBit name does not.
+    _added() {
+        local regex="$1"
+        ! echo "$current_name" | grep -Eqi "$regex" && \
+          echo "$GRAB_TITLE"  | grep -Eqi "$regex"
+    }
+
+    diff_tokens=()
+
+    # Release-group suffix recovery — automatic. Flexible match for -GROUP,
+    # - GROUP, -GROUP), etc. Skipped if GRAB_RG is empty (some trackers
+    # don't populate it; user-defined tokens still apply).
+    _grab_rg_esc=""
+    if [ -n "$GRAB_RG" ]; then
+        _grab_rg_esc=$(printf '%s' "$GRAB_RG" | sed 's/[.[\*^$()+?{|\\]/\\&/g')
+        if ! echo "$current_name" | grep -Eqi "[-][ ]?${_grab_rg_esc}([^a-zA-Z0-9]|$)"; then
+            diff_tokens+=("-${GRAB_RG} (release group)")
+        fi
+    fi
+
+    # User-defined tokens — format per entry: "label:regex".
+    # Common Sonarr use case: streaming source flags (AMZN, NF, DSNP, ...)
+    # whose TRaSH CFs score the release title. Filename rarely carries
+    # these flags, so the rename keeps the score intact on import.
+    for _cf_entry in "${GRAB_RENAME_CUSTOM_TOKENS[@]}"; do
+        _cf_label="${_cf_entry%%:*}"
+        _cf_regex="${_cf_entry#*:}"
+        [ -z "$_cf_label" ] || [ -z "$_cf_regex" ] && continue
+        _added "$_cf_regex" && diff_tokens+=("$_cf_label")
+    done
+
+    # Build summary string for log + Discord
+    if [ "${#diff_tokens[@]}" -gt 0 ]; then
+        printf -v diff_summary '%s, ' "${diff_tokens[@]}"
+        diff_summary="${diff_summary%, }"
+        log "INFO" "Tokens added by rename: $diff_summary"
+    else
+        log "INFO" "No meaningful tokens to recover — skipping rename (cosmetic only)"
+        exit 0
+    fi
+
+    # Split group vs other tokens for Discord rendering
+    group_recovered=false
+    other_tokens=()
+    for t in "${diff_tokens[@]}"; do
+        if [[ "$t" == *"(release group)"* ]]; then
+            group_recovered=true
+        else
+            other_tokens+=("$t")
+        fi
+    done
+
+    # Strip indexer-appended suffixes after the release group before the
+    # rename call. Some indexers append an ID tag after -<RG> (e.g.
+    # "-126811 x ATM05") that's valid in the indexer's release listing
+    # but shouldn't end up in the qBit torrent name. Keep the title up
+    # to and including -<RG>, drop anything after. No-op if RG is empty
+    # or not at a trailing position.
+    final_title="$GRAB_TITLE"
+    if [ -n "$GRAB_RG" ] && [[ "$GRAB_TITLE" =~ ^(.*[-]\ ?${_grab_rg_esc})([^a-zA-Z0-9].*)?$ ]]; then
+        final_title="${BASH_REMATCH[1]}"
+    fi
+
+    # Execute rename
+    log "INFO" "Renaming qBit torrent to: $final_title"
+    rename_response=$(curl -sS --max-time 10 -w "\nHTTP_CODE:%{http_code}" \
+        -X POST "${qbit_url}/api/v2/torrents/rename" \
+        --data-urlencode "hash=${hash_lower}" \
+        --data-urlencode "name=${final_title}" 2>/dev/null)
+
+    rename_http=$(echo "$rename_response" | grep "HTTP_CODE:" | tail -1 | cut -d: -f2)
+
+    if [ "$rename_http" = "200" ]; then
+        log "INFO" "Rename successful (HTTP 200)"
+    else
+        log "WARN" "Rename failed (HTTP $rename_http)"
+        exit 0
+    fi
+
+    # Discord notification
+    if [ "${DISCORD_ENABLED:-false}" = "true" ] && [ -n "${DISCORD_WEBHOOK_URL:-}" ] && \
+       [ "${#diff_tokens[@]}" -gt 0 ]; then
+        tokens_recovered=""
+        if [ "${#other_tokens[@]}" -gt 0 ]; then
+            printf -v tokens_recovered '%s, ' "${other_tokens[@]}"
+            tokens_recovered="${tokens_recovered%, }"
+        fi
+
+        notif_title="Renamed - ${sonarr_series_title:-Unknown} (${sonarr_series_year:-?})"
+        notif_color=16753920  # Orange (0xFFA500)
+
+        fields_json='[]'
+
+        fields_json=$(echo "$fields_json" | jq \
+            --arg val "$GRAB_CLIENT" \
+            '. += [{ name: "Renamed in", value: $val, inline: false }]')
+
+        if [ "$group_recovered" = "true" ]; then
+            fields_json=$(echo "$fields_json" | jq \
+                --arg val "$GRAB_RG" \
+                '. += [{ name: "Release Group Recovered", value: $val, inline: true }]')
+        fi
+
+        if [ -n "$tokens_recovered" ]; then
+            fields_json=$(echo "$fields_json" | jq \
+                --arg val "$tokens_recovered" \
+                '. += [{ name: "Tokens Recovered", value: $val, inline: true }]')
+        fi
+
+        fields_json=$(echo "$fields_json" | jq \
+            --arg event "Grab" \
+            --arg old "$current_name" \
+            --arg new "$final_title" \
+            '. += [
+                { name: "Event", value: $event, inline: true },
+                { name: "Torrent Name", value: $old, inline: false },
+                { name: "Restored to Release Name", value: $new, inline: false }
+            ]')
+
+        payload=$(jq -n \
+            --arg title "$notif_title" \
+            --argjson color "$notif_color" \
+            --argjson fields "$fields_json" \
+            --arg footer_text "$DISCORD_FOOTER" \
+            --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
+            '{
+                embeds: [{
+                    title: $title,
+                    color: $color,
+                    fields: $fields,
+                    footer: { text: $footer_text },
+                    timestamp: $timestamp
+                }]
+            }')
+        response=$(curl -sS -w "\nHTTP_CODE:%{http_code}" --max-time 10 \
+            -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$payload" 2>/dev/null)
+        http_code=$(echo "$response" | grep "HTTP_CODE:" | tail -1 | cut -d: -f2)
+        if [ "$http_code" = "204" ] || [ "$http_code" = "200" ]; then
+            log "INFO" "Discord notification sent successfully"
+        else
+            log "WARN" "Discord notification failed (HTTP $http_code)"
+        fi
+    fi
+
+    log "INFO" "Grab handler complete"
     exit 0
 fi
 
