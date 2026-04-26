@@ -2,6 +2,7 @@
 # -----------------------------------------------------------------------------
 # Tagarr Recover — Release Group Recovery from Grab History
 # Version: 2.0.0
+# Compatible with config version: 1.0
 #
 # Scans movies/episodes in Radarr or Sonarr where the release group is
 # missing or unknown, and recovers it from the grab history. This fixes

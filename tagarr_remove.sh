@@ -2,6 +2,7 @@
 # -----------------------------------------------------------------------------
 # Tagarr Remove — Bulk Tag Removal Tool
 # Version: 1.0.0
+# Compatible with config version: 1.1
 #
 # Removes specified tags from movies in one or two Radarr instances.
 # Optionally deletes the tag definitions themselves after removal.

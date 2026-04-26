@@ -1,5 +1,27 @@
 # Changelog
 
+## v2.10.0 — 2026-04-26
+
+### Changed (versioning convention)
+
+- **Cross-reference between scripts and config samples.** Every script-config pair now carries explicit compatibility headers so users can verify match at a glance:
+    - Script header: `# Compatible with config version: X.Y`
+    - Config sample header: `# For script version: X.Y.Z+`
+  Looking at the headers tells you whether your local script and config belong together — no need to dig through CHANGELOG history. Format documented in `scripts/tagarr/CLAUDE.md`.
+- **Configs bump on any sample edit.** Documentation, example text, comment-only changes — all of them now bump the `Config version` line. Without the bump, `tagarr_migrate.sh` doesn't redistribute the change to existing users. Established as a rule going forward; drift fixed retroactively in this release.
+
+### Fixed (drift bumps)
+
+- `tagarr.conf.sample` 1.0 → 1.1 — sample was edited in v0.2.0 (generic placeholder pass replacing `FLUX`/`SiC`/`TheFarm`/`126811`/`XEBEC` with `mygroup`/`othergroup`) without a version bump. Existing users on `1.0` haven't received the cleaner placeholders.
+- `tagarr_remove.conf.sample` 1.0 → 1.1 — same pass.
+- `tagarr_rename.conf.sample` 1.0 → 1.1 — same pass.
+
+### Notes
+
+- No behavioral changes to any script. This is a pure metadata + convention release.
+- `tagarr_migrate.sh` will run for users with the bumped configs (tagarr / tagarr_remove / tagarr_rename) on next invocation, generating timestamped backups. The migrated configs will pick up the generic placeholders from v0.2.0 plus the new `For script version:` cross-reference header.
+- Script files were not bumped — adding a single comment line is not a behavior change. Existing users will pick up the new headers via the next functional update of each script.
+
 ## v2.9.0 — 2026-04-25
 
 ### Added (tagarr_import_sonarr.sh v1.1.0)

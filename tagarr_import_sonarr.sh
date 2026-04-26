@@ -2,6 +2,7 @@
 # -----------------------------------------------------------------------------
 # Tagarr Import Sonarr — Release Group Recovery + Grab-Rename
 # Version: 1.1.0
+# Compatible with config version: 1.1
 #
 # Sonarr Connect handler that:
 #   1. On Grab — renames the qBit torrent to recover release-group + any

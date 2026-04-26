@@ -2,6 +2,7 @@
 # -----------------------------------------------------------------------------
 # Tagarr — Radarr Release Group Tagger with Discovery
 # Version: 1.3.0
+# Compatible with config version: 1.1
 #
 # Scans movies in one or two Radarr instances and tags them based on release
 # group, quality source (MA/Play WEB-DL), and lossless audio codec (TrueHD,

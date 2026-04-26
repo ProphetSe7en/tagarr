@@ -2,6 +2,7 @@
 # -----------------------------------------------------------------------------
 # Tagarr List — List-Based Movie Tagger
 # Version: 1.0.0
+# Compatible with config version: 1.0
 #
 # Tags movies in Radarr based on external lists from TMDb or Trakt.
 # Matches list entries against existing Radarr movies by TMDb ID.

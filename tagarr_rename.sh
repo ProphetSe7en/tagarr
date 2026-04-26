@@ -2,6 +2,7 @@
 # -----------------------------------------------------------------------------
 # Tagarr Rename — Bulk Tag Rename Tool
 # Version: 1.0.0
+# Compatible with config version: 1.1
 #
 # Renames tags in one or two Radarr instances by creating a new tag,
 # migrating all movies from old to new via the bulk /movie/editor API,
