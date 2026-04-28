@@ -1,5 +1,6 @@
 # ========== CONFIGURATION ==========
-# Config version: 1.2
+# Config version: 1.3
+# For script version: 2.11.0+
 # Config for tagarr_migrate.sh
 #
 # This file lets tagarr_migrate.sh automatically update your tagarr
@@ -51,6 +52,40 @@
 # as tagarr_migrate.sh.
 #
 # ============================================================================
+# Same script in multiple folders (since v2.11.0)
+# ============================================================================
+#
+# Got 2 Radarr instances, or 3 Sonarr instances, each with its own
+# Connect scripts folder? Use the _DIRS variant — same name as _DIR but
+# plural — and list every folder. tagarr_migrate.sh updates the script
+# AND migrates the config in every folder you list.
+#
+# Example — tagarr_import.sh in two Radarr folders:
+#
+#   AUTOUPDATE_TAGARR_IMPORT=true
+#   AUTOUPDATE_TAGARR_IMPORT_DIRS=(
+#       "/mnt/user/appdata/radarr/scripts"
+#       "/mnt/user/appdata/radarr4k/scripts"
+#   )
+#
+# Example — tagarr_import_sonarr.sh in three Sonarr folders:
+#
+#   AUTOUPDATE_TAGARR_IMPORT_SONARR=true
+#   AUTOUPDATE_TAGARR_IMPORT_SONARR_DIRS=(
+#       "/mnt/user/appdata/sonarr/scripts"
+#       "/mnt/user/appdata/sonarr4k/scripts"
+#       "/mnt/user/appdata/sonarranime/scripts"
+#   )
+#
+# How _DIR vs _DIRS interact:
+#   - _DIRS set (non-empty array)  → all listed folders are processed
+#   - _DIRS unset, _DIR set        → single folder, original behavior
+#   - both unset                   → uses the folder containing tagarr_migrate.sh
+#
+# Use _DIRS even for a single folder if you think you'll add more
+# instances later — just expand the array.
+#
+# ============================================================================
 # Requirements
 # ============================================================================
 #
@@ -67,27 +102,47 @@
 # tagarr.sh — scans your library and tags movies by release group
 #AUTOUPDATE_TAGARR=true
 #AUTOUPDATE_TAGARR_DIR=""
+# Multiple folders (uncomment + list paths to use):
+#AUTOUPDATE_TAGARR_DIRS=(
+#    "/mnt/user/appdata/radarr/scripts"
+#    "/mnt/user/appdata/radarr4k/scripts"
+#)
 
 # tagarr_import.sh — Radarr Connect handler (tags + recovers on every import)
 #AUTOUPDATE_TAGARR_IMPORT=true
 #AUTOUPDATE_TAGARR_IMPORT_DIR=""
+# Multiple folders (uncomment + list paths to use):
+#AUTOUPDATE_TAGARR_IMPORT_DIRS=(
+#    "/mnt/user/appdata/radarr/scripts"
+#    "/mnt/user/appdata/radarr4k/scripts"
+#)
 
 # tagarr_import_sonarr.sh — Sonarr Connect handler (recovers release groups on import)
 #AUTOUPDATE_TAGARR_IMPORT_SONARR=true
 #AUTOUPDATE_TAGARR_IMPORT_SONARR_DIR=""
+# Multiple folders (uncomment + list paths to use):
+#AUTOUPDATE_TAGARR_IMPORT_SONARR_DIRS=(
+#    "/mnt/user/appdata/sonarr/scripts"
+#    "/mnt/user/appdata/sonarr4k/scripts"
+#    "/mnt/user/appdata/sonarranime/scripts"
+#)
 
 # tagarr_list.sh — tags movies from TMDb or Trakt lists
 #AUTOUPDATE_TAGARR_LIST=true
 #AUTOUPDATE_TAGARR_LIST_DIR=""
+#AUTOUPDATE_TAGARR_LIST_DIRS=()
 
 # tagarr_recover.sh — fixes missing release groups from grab history
 #AUTOUPDATE_TAGARR_RECOVER=true
 #AUTOUPDATE_TAGARR_RECOVER_DIR=""
+#AUTOUPDATE_TAGARR_RECOVER_DIRS=()
 
 # tagarr_remove.sh — bulk-removes tags from movies in Radarr
 #AUTOUPDATE_TAGARR_REMOVE=true
 #AUTOUPDATE_TAGARR_REMOVE_DIR=""
+#AUTOUPDATE_TAGARR_REMOVE_DIRS=()
 
 # tagarr_rename.sh — renames a tag (old name → new name) and migrates movies
 #AUTOUPDATE_TAGARR_RENAME=true
 #AUTOUPDATE_TAGARR_RENAME_DIR=""
+#AUTOUPDATE_TAGARR_RENAME_DIRS=()

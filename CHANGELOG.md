@@ -1,5 +1,31 @@
 # Changelog
 
+## v2.11.0 — 2026-04-28
+
+### Added (tagarr_migrate.sh)
+
+- **Update the same script across many folders in one run.** If you have more than one Radarr or Sonarr instance — say one HD Radarr and one 4K Radarr, each with its own `scripts/` folder for `tagarr_import.sh` — list every folder once and `tagarr_migrate.sh` does the rest. Same goes for Sonarr setups with HD + 4K + Anime in three folders.
+
+  Open `tagarr_migrate.conf` and use the new list form:
+    ```bash
+    AUTOUPDATE_TAGARR_IMPORT=true
+    AUTOUPDATE_TAGARR_IMPORT_DIRS=(
+        "/mnt/user/appdata/radarr/scripts"
+        "/mnt/user/appdata/radarr4k/scripts"
+    )
+    ```
+  Each folder gets the script updated AND its `tagarr_import.conf` migrated in the same run. The summary at the end shows which folder got which version, so you can spot at a glance if anything was missed.
+
+  If you only have one folder, nothing changes — the existing `_DIR="/path"` line keeps working. Use the new `_DIRS=(...)` list when you add a second instance.
+
+### Fixed (tagarr_migrate.sh)
+
+- **Multi-folder config lists no longer get wiped on the next migration.** A bug in the migration engine would have erased your `_DIRS=(...)` paths on the next run because the engine didn't recognise the new list-style slot in the sample. Fixed in the same release so the new feature is safe to use from day one. If you upgrade from v2.10.0, `tagarr_migrate.sh` self-updates first, so the fix is in place before any config changes happen.
+
+### Changed (tagarr_migrate.conf.sample)
+
+- **Config version bumped 1.2 → 1.3.** Adds a "Same script in multiple folders" section with ready-to-copy Radarr and Sonarr examples, and shows the new `_DIRS=(...)` slot inline next to each existing `_DIR=""` line so you can see both options at once.
+
 ## v2.10.0 — 2026-04-26
 
 ### Changed (versioning convention)

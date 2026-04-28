@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# Compatible with config version: 1.3
+
 # -----------------------------------------------------------------------------
 # Tagarr — Config Migration Tool
 #
@@ -46,6 +48,8 @@
 # -----------------------------------------------------------------------------
 
 set -euo pipefail
+
+SCRIPT_VERSION="2.11.0"
 
 SCRIPT_PATH="$(readlink -f "$0")"
 SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
@@ -157,6 +161,38 @@ VALID_TAGARR_CONFS=(
     tagarr_migrate.conf
 )
 
+# --- Shared: resolve target directories for a given _DIR variable name. ---
+#
+# Multi-folder support (since v2.11.0). Users with N Radarr/Sonarr instances
+# all running the same script (typically tagarr_import.sh / tagarr_import_sonarr.sh)
+# can list every folder in an array variable named like _DIR but plural:
+#
+#   AUTOUPDATE_TAGARR_IMPORT=true
+#   AUTOUPDATE_TAGARR_IMPORT_DIRS=(
+#       "/mnt/user/appdata/radarr/scripts"
+#       "/mnt/user/appdata/radarr4k/scripts"
+#   )
+#
+# Precedence (per script):
+#   1. _DIRS array — every entry processed; takes priority when non-empty
+#   2. _DIR string — single entry (original / backwards-compat)
+#   3. Caller falls back to SCRIPT_DIR (auto-update path) or skips (--all)
+#
+# Populates the global RESOLVED_DIRS array. Empty array = neither variable
+# was set; caller decides the fallback. Bash array indirection through
+# `declare -p` + `eval` so we don't trip set -u on unset arrays.
+resolve_dirs() {
+    local dir_var="$1"
+    local dirs_var_name="${dir_var}S"
+    RESOLVED_DIRS=()
+    if declare -p "$dirs_var_name" 2>/dev/null | grep -q '^declare -a'; then
+        eval "RESOLVED_DIRS=(\"\${${dirs_var_name}[@]}\")"
+    fi
+    if [ ${#RESOLVED_DIRS[@]} -eq 0 ] && [ -n "${!dir_var:-}" ]; then
+        RESOLVED_DIRS=("${!dir_var}")
+    fi
+}
+
 # --- Auto-update tagarr scripts (opt-in via tagarr_migrate.conf) ---
 # Reads AUTOUPDATE_<SCRIPT>=true flags; only runs when config exists.
 # Guarded against --all recursion via TAGARR_MIGRATE_SKIP_AUTO_UPDATE.
@@ -181,7 +217,8 @@ auto_update_scripts() {
     local any_enabled=false
 
     local entry script flag_var dir_var enabled target_dir script_path
-    local local_version remote_version tmp
+    local local_version remote_version tmp backup_dir
+    local cached_remote=""
     for entry in "${SCRIPT_ENTRIES[@]}"; do
         IFS='|' read -r script flag_var dir_var <<<"$entry"
 
@@ -189,69 +226,83 @@ auto_update_scripts() {
         [ "$enabled" = "true" ] || continue
         any_enabled=true
 
-        target_dir="${!dir_var:-}"
-        [ -z "$target_dir" ] && target_dir="$SCRIPT_DIR"
-
-        script_path="${target_dir}/${script}"
-        if [ ! -f "$script_path" ]; then
-            skipped+=("$script (not found at $target_dir)")
-            continue
+        # Multi-folder support: resolve every target dir for this script.
+        # _DIRS array (since v2.11.0) wins over _DIR string; both empty =
+        # fall back to SCRIPT_DIR. Each dir is processed independently —
+        # one missing-script in folder A doesn't skip folder B.
+        resolve_dirs "$dir_var"
+        local -a script_dirs
+        if [ ${#RESOLVED_DIRS[@]} -gt 0 ]; then
+            script_dirs=("${RESOLVED_DIRS[@]}")
+        else
+            script_dirs=("$SCRIPT_DIR")
         fi
 
-        local_version=$(grep -E '^SCRIPT_VERSION=' "$script_path" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+        # Single shared remote_version lookup per script — same payload
+        # whether we update one folder or five. Empty cached_remote means
+        # the script isn't listed in versions.json (skipped below).
         remote_version=$(echo "$remote_manifest" | jq -r --arg s "$script" '.[$s] // ""')
-
         if [ -z "$remote_version" ]; then
             skipped+=("$script (not listed in versions.json)")
             continue
         fi
 
-        if [ "$local_version" = "$remote_version" ]; then
-            skipped+=("$script (v$local_version — already current)")
-            continue
-        fi
+        for target_dir in "${script_dirs[@]}"; do
+            script_path="${target_dir}/${script}"
+            if [ ! -f "$script_path" ]; then
+                skipped+=("$script (not found at $target_dir)")
+                continue
+            fi
 
-        # Only update when remote is strictly newer (sort -V version sort)
-        if [ "$(printf '%s\n%s\n' "$remote_version" "$local_version" | sort -V 2>/dev/null | tail -1)" != "$remote_version" ]; then
-            skipped+=("$script (local v$local_version ahead of remote v$remote_version)")
-            continue
-        fi
+            local_version=$(grep -E '^SCRIPT_VERSION=' "$script_path" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
 
-        echo "Updating $script: v$local_version -> v$remote_version ($target_dir)"
-        tmp=$(mktemp)
-        if ! curl -fsSL "${GITHUB_BASE}/${script}" -o "$tmp" 2>/dev/null; then
-            failed+=("$script (download failed)")
-            log "script update FAILED: $script (download failed from ${GITHUB_BASE}/${script})"
-            rm -f "$tmp"
-            continue
-        fi
-        # Sanity 1: downloaded file must start with a shebang
-        if ! head -1 "$tmp" | grep -q '^#!'; then
-            failed+=("$script (downloaded file not a script)")
-            log "script update FAILED: $script (downloaded file not a script — no shebang)"
-            rm -f "$tmp"
-            continue
-        fi
-        # Sanity 2: must carry our SCRIPT_VERSION= signature. Every tagarr
-        # script listed in versions.json has this marker — absence means
-        # GitHub returned something else (hijacked mirror, wrong branch,
-        # partial download).
-        if ! grep -q '^SCRIPT_VERSION=' "$tmp"; then
-            failed+=("$script (downloaded file missing SCRIPT_VERSION marker)")
-            log "script update FAILED: $script (downloaded file missing SCRIPT_VERSION marker)"
-            rm -f "$tmp"
-            continue
-        fi
+            if [ "$local_version" = "$remote_version" ]; then
+                skipped+=("$script @ $target_dir (v$local_version — already current)")
+                continue
+            fi
 
-        # Backup to tagarr_backups/ with datestamp before replacing
-        backup_dir="${target_dir}/tagarr_backups"
-        mkdir -p "$backup_dir" 2>/dev/null
-        cp "$script_path" "${backup_dir}/${script}.$(date '+%Y-%m-%d')"
-        # Overwrite in place to preserve existing permissions/ownership
-        cat "$tmp" > "$script_path"
-        rm -f "$tmp"
-        updated+=("$script: v$local_version -> v$remote_version")
-        log "script updated: $script v$local_version -> v$remote_version in $target_dir"
+            # Only update when remote is strictly newer (sort -V version sort)
+            if [ "$(printf '%s\n%s\n' "$remote_version" "$local_version" | sort -V 2>/dev/null | tail -1)" != "$remote_version" ]; then
+                skipped+=("$script @ $target_dir (local v$local_version ahead of remote v$remote_version)")
+                continue
+            fi
+
+            echo "Updating $script: v$local_version -> v$remote_version ($target_dir)"
+            tmp=$(mktemp)
+            if ! curl -fsSL "${GITHUB_BASE}/${script}" -o "$tmp" 2>/dev/null; then
+                failed+=("$script @ $target_dir (download failed)")
+                log "script update FAILED: $script @ $target_dir (download failed from ${GITHUB_BASE}/${script})"
+                rm -f "$tmp"
+                continue
+            fi
+            # Sanity 1: downloaded file must start with a shebang
+            if ! head -1 "$tmp" | grep -q '^#!'; then
+                failed+=("$script @ $target_dir (downloaded file not a script)")
+                log "script update FAILED: $script @ $target_dir (downloaded file not a script — no shebang)"
+                rm -f "$tmp"
+                continue
+            fi
+            # Sanity 2: must carry our SCRIPT_VERSION= signature. Every tagarr
+            # script listed in versions.json has this marker — absence means
+            # GitHub returned something else (hijacked mirror, wrong branch,
+            # partial download).
+            if ! grep -q '^SCRIPT_VERSION=' "$tmp"; then
+                failed+=("$script @ $target_dir (downloaded file missing SCRIPT_VERSION marker)")
+                log "script update FAILED: $script @ $target_dir (downloaded file missing SCRIPT_VERSION marker)"
+                rm -f "$tmp"
+                continue
+            fi
+
+            # Backup to tagarr_backups/ with datestamp before replacing
+            backup_dir="${target_dir}/tagarr_backups"
+            mkdir -p "$backup_dir" 2>/dev/null
+            cp "$script_path" "${backup_dir}/${script}.$(date '+%Y-%m-%d')"
+            # Overwrite in place to preserve existing permissions/ownership
+            cat "$tmp" > "$script_path"
+            rm -f "$tmp"
+            updated+=("$script @ $target_dir: v$local_version -> v$remote_version")
+            log "script updated: $script v$local_version -> v$remote_version in $target_dir"
+        done
     done
 
     [ "$any_enabled" = "false" ] && return 0
@@ -277,7 +328,7 @@ auto_update_scripts() {
 }
 
 if [ "${TAGARR_MIGRATE_SKIP_AUTO_UPDATE:-}" != "1" ]; then
-    log "run start"
+    log "run start (tagarr_migrate.sh v$SCRIPT_VERSION)"
     auto_update_scripts
     # Discovery notice for the opt-in auto-update feature. Shown once per
     # invocation when tagarr_migrate.conf does not exist. Silent once the
@@ -301,18 +352,25 @@ if [ -z "$OLD_CONFIG" ] && [ "$RUN_ALL" != "true" ]; then
 fi
 
 if [ "$RUN_ALL" = "true" ]; then
-    # Collect dirs to scan: SCRIPT_DIR + every AUTOUPDATE_*_DIR set
+    # Collect dirs to scan: SCRIPT_DIR + every AUTOUPDATE_*_DIR / _DIRS set.
+    # Multi-folder support: resolve_dirs handles both the legacy _DIR string
+    # and the new _DIRS array (since v2.11.0). Each unique dir is added once
+    # so the same Radarr-instance folder isn't migrated twice when listed in
+    # both forms by mistake.
     scan_dirs=("$SCRIPT_DIR")
     for entry in "${SCRIPT_ENTRIES[@]}"; do
         IFS='|' read -r _sn _fl dir_var <<<"$entry"
-        val="${!dir_var:-}"
-        if [ -n "$val" ] && [ -d "$val" ]; then
+        resolve_dirs "$dir_var"
+        [ ${#RESOLVED_DIRS[@]} -eq 0 ] && continue
+        for val in "${RESOLVED_DIRS[@]}"; do
+            [ -z "$val" ] && continue
+            [ -d "$val" ] || continue
             already_in=false
             for d in "${scan_dirs[@]}"; do
                 [ "$d" = "$val" ] && already_in=true && break
             done
             [ "$already_in" = "false" ] && scan_dirs+=("$val")
-        fi
+        done
     done
 
     # Only pick up files whose basenames match the VALID_TAGARR_CONFS list.
@@ -437,9 +495,16 @@ echo "Backup:  $BACKUP_FILE"
 echo ""
 
 # --- Discover array variable names from sample ---
+# Catches both uncommented (VAR=(...)) and commented-out placeholders
+# (#VAR=(...)). Commented array slots are used by tagarr_migrate.conf to
+# represent opt-in multi-folder lists (since v2.11.0): the user uncomments
+# the `_DIRS=(...)` block to enable. Without catching commented forms here,
+# the user's uncommented array would be silently dropped on next migration
+# because output build walks the SAMPLE — if the sample line is unrecognised,
+# the user's data has nowhere to go.
 declare -A ARRAY_VARS
 while IFS= read -r line; do
-    if [[ "$line" =~ ^[[:space:]]*([A-Z_]+)=\( ]]; then
+    if [[ "$line" =~ ^[[:space:]]*#?([A-Z_]+)=\( ]]; then
         ARRAY_VARS["${BASH_REMATCH[1]}"]=1
     fi
 done < "$SAMPLE_FILE"
@@ -474,13 +539,15 @@ done
 SCALAR_VARS=()
 in_array=false
 while IFS= read -r line; do
-    # Track array blocks to skip them
-    if [[ "$line" =~ ^[[:space:]]*[A-Z_]+=\( ]]; then
+    # Track array blocks to skip them. Allow commented forms so opt-in
+    # array slots (e.g. _DIRS=(...) in tagarr_migrate.conf.sample, since
+    # v2.11.0) don't double-register as scalars.
+    if [[ "$line" =~ ^[[:space:]]*#?[A-Z_]+=\( ]]; then
         in_array=true
         continue
     fi
     if [ "$in_array" = "true" ]; then
-        [[ "$line" =~ ^[[:space:]]*\) ]] && in_array=false
+        [[ "$line" =~ ^[[:space:]]*#?\) ]] && in_array=false
         continue
     fi
     # Scalar variable assignment — optionally preceded by a #, with optional
@@ -525,9 +592,12 @@ output=""
 skip_array=""
 
 while IFS= read -r line; do
-    # Handle array blocks — replace with old values if they exist
+    # Handle array blocks — replace with old values if they exist.
+    # Allow commented-out array close (#)) so commented opt-in slots in
+    # the sample (since v2.11.0) close cleanly even when the user hasn't
+    # enabled them.
     if [ -n "$skip_array" ]; then
-        if [[ "$line" =~ ^[[:space:]]*\) ]]; then
+        if [[ "$line" =~ ^[[:space:]]*#?\) ]]; then
             [ -z "${old_arrays[$skip_array]:-}" ] && output+="${line}"$'\n'
             skip_array=""
         else
@@ -536,10 +606,13 @@ while IFS= read -r line; do
         continue
     fi
 
-    # Detect start of array block
+    # Detect start of array block. Allow commented-out array start (#VAR=()
+    # so opt-in array slots in the sample (e.g. _DIRS multi-folder lists,
+    # since v2.11.0) match the user's UNCOMMENTED form via old_arrays —
+    # otherwise the user's data would be silently dropped on next migration.
     array_matched=false
     for arr_name in "${!ARRAY_VARS[@]}"; do
-        if [[ "$line" =~ ^[[:space:]]*${arr_name}=\( ]]; then
+        if [[ "$line" =~ ^[[:space:]]*#?${arr_name}=\( ]]; then
             array_matched=true
             if [ -n "${old_arrays[$arr_name]:-}" ]; then
                 output+="${old_arrays[$arr_name]}"
