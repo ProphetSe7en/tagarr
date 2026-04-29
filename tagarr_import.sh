@@ -2,7 +2,7 @@
 
 # -----------------------------------------------------------------------------
 # Tagarr Import — Event-Driven Radarr Tagger with Discovery
-# Version: 1.6.1
+# Version: 1.6.2
 # Compatible with config version: 1.6
 #
 # Radarr Connect handler that tags individual movies on import, upgrade, or
@@ -34,7 +34,7 @@
 # Test with a single movie before enabling as a Radarr Connect handler.
 # -----------------------------------------------------------------------------
 
-SCRIPT_VERSION="1.6.1"
+SCRIPT_VERSION="1.6.2"
 
 ########################################
 # CONFIG LOADING
@@ -989,10 +989,14 @@ for tag_config in "${RELEASE_GROUPS[@]}"; do
     match_found=false
     match_location=""
 
-    if echo "$COMBINED_LOWER" | grep -q "$search_lower"; then
+    # Word-boundary match — anchors prevent substring false-positives like
+    # "sic" matching inside "jurassic" (regression caught 2026-04-29). Mirrors
+    # tagarr.sh:842-848 and the container's engine.MatchReleaseGroup, both of
+    # which already enforce \b boundaries.
+    if echo "$COMBINED_LOWER" | grep -Eqi "\b${search_lower}\b"; then
         match_found=true
         match_location="filename/scene"
-    elif [ -n "$RELEASE_GROUP_LOWER" ] && echo "$RELEASE_GROUP_LOWER" | grep -q "$search_lower"; then
+    elif [ -n "$RELEASE_GROUP_LOWER" ] && echo "$RELEASE_GROUP_LOWER" | grep -Eqi "\b${search_lower}\b"; then
         match_found=true
         match_location="release group field"
     fi

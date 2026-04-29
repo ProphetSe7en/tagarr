@@ -1,6 +1,12 @@
 # Changelog
 
-## v2.11.0 — 2026-04-28
+## v2.11.1 — 2026-04-29
+
+### Fixed (tagarr_import.sh 1.6.1 → 1.6.2)
+
+- **Short release-group names no longer match inside other words.** Example: `SIC` was matching the letters `sic` inside *Jurassic Park* and getting tagged on every import. Now release-group names only match as whole words, the same way `tagarr.sh` already did. If you've seen wrong tags appearing the past few weeks, just remove them in Radarr.
+
+
 
 ### Added (tagarr_migrate.sh)
 
